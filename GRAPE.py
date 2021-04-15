@@ -38,8 +38,7 @@ class basicGate():
 
 
 class evolutionStep():
-  def __init__(self, evolution = None, size = 2, time=0.01, params=[]):
-    self.evoType = evolution#TEMP
+  def __init__(self, size = 2, time=0.01, params=[]):
     self.size = size#TODO check that is size of self.evolution
     self.time = time
 
@@ -47,16 +46,29 @@ class evolutionStep():
       params += [[0, 0] for _ in range(self.size - len(params))]
 
     self.basicGates = [basicGate(param) for param in params]
+
+    self.J = np.zeros((2 ** self.size, 2 ** self.size), dtype=np.complex)
+    for i in range(self.size - 1):
+      self.J[i + 1][i] = 1
       
   @property
   def evolution(self):
-    if self.evoType == None and self.size == 2:
+    if self.size == 2:
       second = -np.eye(2 ** self.size, dtype=np.complex)
       second[0][0] = 1
       second[3][3] = 1
 
       return (math.cos(self.time / 2) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(self.time / 2) * second)
     return np.eye(2 ** self.size, dtype=np.complex)
+
+    # z = np.asarray([[1, 0], [0, -1]], dtype=complex)
+    # zs = [np.kron(np.eye(2**(i)), np.kron(z, np.eye(2**(self.size - i - 1)))) for i in range(self.size)]
+
+    # H = np.zeros((2 ** self.size, 2 ** self.size), dtype=np.complex)
+    # for i in range(1, self.size):
+    #   for j in range(i):
+    #     H += math.pi * self.J[i][j] * zs[i] @ zs[j]
+    # return linalg.expm(-(1j) * self.time* H)
 
   @property
   def evolutionDerivative(self):
@@ -125,7 +137,15 @@ class implementation():
     self.evolutionGradient = [0] * self.n
     self.phaseGradient = 0
     self.gradient = [[[0, 0] for j in range(self.size)] for i in range(self.n)]
-    self.stepSize = 0.02
+    self.stepSize = 0.05
+    self.phaseStepSize = 0.01
+
+  @property
+  def time(self):
+    time = 0
+    for gate in self.gates:
+      time += gate.time
+    return time.real
 
   @property
   def targetD(self):
@@ -162,29 +182,57 @@ class implementation():
         self.C[i] = self.gates[k].matrix @ self.C[i]
 
   def calculateGradient(self):
-    maxGrad = 0
     for i in range(self.n):
       for j in range(self.size):
         for k in [0, 1]:
-          bigDerivative = np.zeros((2**self.size, 2**self.size), dtype=np.complex)
           self.gradient[i][j][k] = (self.gates[i].derivative(j, k) @ self.C[i] * math.e ** (1j * self.phase)).trace().real * self.stepSize
-          if self.gradient[i][j][k] > maxGrad:
-            maxGrad = self.gradient[i][j][k]
       
     self.evolutionGradient[i] =  (self.gates[i].evolutionDerivative @ self.C[i] * math.e ** (1j * self.phase)).trace().real * self.stepSize
     
-    #self.phaseGradient = - (self.matrix).trace().imag * self.stepSize
+    self.phaseGradient = - (self.matrix).trace().imag * self.stepSize
 
-    #if self.noise:
-    #  for i in range(self.n):
-    #    for j in range(self.size):
-    #      for k in [0, 1]:
-    #       self.gradient[i][j][k] += self.noise * 2 *(random.random() - 1) * self.gradient[i][j][k]
+    if self.noise:
+      for i in range(self.n):
+        for j in range(self.size):
+          for k in [0, 1]:
+           self.gradient[i][j][k] += self.noise * 2 *(random.random() - 1) * self.gradient[i][j][k]
+
+  def stupidCalculateGradient(self):
+    dist1 = self.distance
+
+    gradstep = 0.001
+
+    for i in range(self.n):
+      for j in range(self.size):
+        for k in [0, 1]:
+          self.gates[i].basicGates[j].params[k] += gradstep
+          dist2 = self.distance
+          self.gates[i].basicGates[j].params[k] -= gradstep
+
+          self.gradient[i][j][k] = (dist1 - dist2) / gradstep * self.stepSize
+
+      self.gates[i].time += gradstep
+      dist2 = self.distance
+      self.gates[i].time -= gradstep
       
+      self.evolutionGradient[i] = (dist1 - dist2) / gradstep * self.stepSize
+
+    self.phase += gradstep
+    dist2 = self.distance
+    self.phase -= gradstep
+
+    self.phaseGradient = (dist1 - dist2) / gradstep * self.phaseStepSize
+    
+    if self.noise:
+      for i in range(self.n):
+        for j in range(self.size):
+          for k in [0, 1]:
+           self.gradient[i][j][k] += self.noise * 2 *(random.random() - 1) * self.gradient[i][j][k]
 
   def correctParams(self):
     for i in range(self.n):
       self.gates[i].correctParams(self.gradient[i], self.evolutionGradient[i])
+    self.phase += self.phaseGradient
 
   @property
   def distance(self):
@@ -192,13 +240,26 @@ class implementation():
 
     return distance
 
-  def descend(self, steps=1000, trackDistance=False):
+  def descend(self, steps=1000, trackDistance=False, stupid=False):
     distances = []
     
     for i in range(steps):
       distances += [self.distance]
-      self.makeC()
-      self.calculateGradient()
+
+      if stupid:
+        self.stupidCalculateGradient()
+      else:
+        self.makeC()
+        self.calculateGradient()
       self.correctParams()
+    
+
+    for gate in self.gates:
+      for basicGate in gate.basicGates:
+        for param in basicGate.params:
+          param = param.real % (2 * math.pi)
+      gate.time = gate.time.real % (4 * math.pi)
+    self.phase = self.phase.real % (2 * math.pi)
+
     if trackDistance:
       return distances
