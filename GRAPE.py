@@ -1,47 +1,51 @@
-import numpy as np
-import math
-from math import pi
-import copy
-import random
 
-class basicGate(): # 1-qubit gate
-  def __init__(self, params=[0, 0]):
+import numpy as np
+import cupy as cp
+import math
+import random
+import matplotlib.pyplot as plt
+
+class BasicGate: # 1-qubit gate
+  def __init__(self, params=None):
+    if params is None:
+      params = [0, 0]
     self.params = params
     # Pauli matrices
-    self.I = np.eye(2, dtype=complex) 
+    self.I = np.eye(2, dtype=complex)
     self.X = np.asarray([[0, 1], [1, 0]], dtype=complex)
     self.Y = np.asarray([[0, -1j], [1j, 0]], dtype=complex)
     self.Z = np.asarray([[1, 0], [0, -1]], dtype=complex)
 
   @property
   def matrix(self): # straightforward matrix representation
-    matrix = np.zeros((2, 2), dtype=np.complex)
     matrix = math.cos(self.params[0] / 2) * self.I - 1j * math.sin(self.params[0]/2) * (math.cos(self.params[1]) * self.X + math.sin(self.params[1]) * self.Y)
 
     return matrix
 
-  def randomizeParams(self):
+  def randomize_params(self):
     self.params = [2 * math.pi * random.random(), 2 * math.pi * random.random()]
 
-  def correctParams(self, correction): # update parameters based on passed corrections
+  def correct_params(self, correction): # update parameters based on passed corrections
     self.params[0] += correction[0]
     self.params[1] += correction[1]
 
 
-class evolutionStep(): # a combination of 1-qubit operations followed by evolution
-  def __init__(self, size = 2, params=[]):
+class EvolutionStep: # a combination of 1-qubit operations followed by evolution
+  def __init__(self, size = 2, params=None):
+    if params is None:
+      params = []
     self.size = size # number of qubits
     self.time = 0.2 # evolution time
 
     if len(params) != self.size:
       params += [[0, 0] for _ in range(self.size - len(params))]
 
-    self.basicGates = [basicGate(param) for param in params] # 1-qubit gates
+    self.basicGates = [BasicGate(param) for param in params] # 1-qubit gates
 
     self.J = np.zeros((2 ** self.size, 2 ** self.size), dtype=np.complex) # interaction matrix (NOT FINISHED)
     for i in range(self.size - 1):
       self.J[i + 1][i] = 1 # костыль
-      
+
   @property
   def evolution(self): # evolution matrix
     if self.size == 2:
@@ -49,12 +53,12 @@ class evolutionStep(): # a combination of 1-qubit operations followed by evoluti
       second[0][0] = 1
       second[3][3] = 1
 
-      return (math.cos(self.time / 2) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(self.time / 2) * second)
+      return math.cos(self.time / 2) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(self.time / 2) * second
     return np.eye(2 ** self.size, dtype=np.complex) # NOT FINISHED
-    
+
   @property
   def matrix(self): # unitary of this evolution step
-    matrix = np.ones((1), dtype=np.complex)
+    matrix = np.ones(1, dtype=np.complex)
 
     for i in range(self.size):
       matrix = np.kron(matrix, self.basicGates[i].matrix) # 1-qubit "kick"
@@ -62,17 +66,17 @@ class evolutionStep(): # a combination of 1-qubit operations followed by evoluti
 
     return matrix
 
-  def randomizeParams(self):
+  def randomize_params(self):
     for basicGate in self.basicGates:
-      basicGate.randomizeParams()
+      basicGate.randomize_params()
 
-  def correctParams(self, correction, evolutionCorrection): # update parameters based on passed corrections     
+  def correct_params(self, correction, evolution_correction): # update parameters based on passed corrections
     for i in range(self.size):
-      self.basicGates[i].correctParams(correction[i])
-    self.time += evolutionCorrection
+      self.basicGates[i].correct_params(correction[i])
+    self.time += evolution_correction
 
 
-class implementation(): # class to approximate abstract unitary using a series of evolutionStep
+class Implementation: # class to approximate abstract unitary using a series of evolutionStep
   def __init__(self, target, n):
     self.target = target # unitary to approximate
     self.noise = 0.05 # noise levels (see self.stupidCalculateGradient)
@@ -81,11 +85,11 @@ class implementation(): # class to approximate abstract unitary using a series o
     self.size = int(math.log2(self.target.size) / 2) # number of qubits
 
     self.phase = 0 # global phase
-    self.gates = [evolutionStep(size=self.size) for i in range(self.n)] # evolution steps
+    self.gates = [EvolutionStep(size=self.size) for _ in range(self.n)] # evolution steps
 
     self.evolutionGradient = [0] * self.n # -gradient of cost function by evolution times
     self.phaseGradient = 0 # -gradient of cost function by global phase
-    self.gradient = [[[0, 0] for j in range(self.size)] for i in range(self.n)] # -gradient of cost function by 1-qubit operations parameters
+    self.gradient = [[[0, 0] for _ in range(self.size)] for _ in range(self.n)] # -gradient of cost function by 1-qubit operations parameters
     self.stepSize = 0.05 # parameter update by gradient coefficient for 1-qubit operations parameters and evolution times
     self.phaseStepSize = 0.01 # parameter update by gradient coefficient for global phase (diverges when trying to lower)
 
@@ -97,7 +101,7 @@ class implementation(): # class to approximate abstract unitary using a series o
     return time.real
 
   @property
-  def targetD(self): # target dagger
+  def target_d(self): # target dagger
     return self.target.conjugate().transpose()
 
   @property
@@ -108,16 +112,43 @@ class implementation(): # class to approximate abstract unitary using a series o
       matrix = matrix @ self.gates[i].matrix * math.e ** (1j * self.phase)
 
     return matrix
-  
-  def writeParams(self, params = None): # writes params for 1-qubit operations
+
+  def write_params(self, params = None): # writes params for 1-qubit operations
     if params:
       for i in range(self.n):
         self.gates[i].params = params[i]
     else:
       for i in range(self.n):
-        self.gates[i].randomizeParams() # randomizes if no input
+        self.gates[i].randomize_params() # randomizes if no input
 
-  def stupidCalculateGradient(self): # grad f = (f(x + gradstep) - f(x)) / gradstep
+  def save_params(self, filename):
+    #self.size
+    #self.n
+    #self.gates[0].basicGates[0].params[0], self.gates[0].basicGates[0].params[1]; ... ; self.gates[0].basicGates[self.size - 1].params[0]; self.gates[0].basicGates[self.size - 1].params[1]; self.gates[0].time
+    #...
+    #self.gates[self.n - 1].basicGates[0].params[0], self.gates[0].basicGates[0].params[1]; ... ; self.gates[0].basicGates[self.size - 1].params[0]; self.gates[self.n - 1].basicGates[self.size - 1].params[1]; self.gates[self.n - 1].time
+    #self.phase
+
+    file = open(filename, "w")
+    for i in range(self.n):
+      for j in range(self.size):
+        file.write(f"{self.gates[i].basicGates[j].params[0]}; {self.gates[i].basicGates[j].params[0]}; ")
+      file.write(f"{self.gates[i].time}\n")
+    for i in range(2 * self.size + 1):
+      file.write(f"{self.phase} ;")
+    file.write("\n")
+
+  def read_params(self, filename):
+    file = open(filename, "r")
+    data = np.genfromtxt(filename, delimiter=";")
+    for i in range(self.n):
+      for j in range(self.size):
+        self.gates[i].basicGates[j].params[0] = data[i][2 * j]
+        self.gates[i].basicGates[j].params[1] = data[i][2 * j + 1]
+      self.gates[i].time = data[i][2 * self.size]
+    self.phase = data[self.n][0]
+
+  def calculate_gradient(self): # grad f = (f(x + gradstep) - f(x)) / gradstep
     dist1 = self.distance
 
     gradstep = 0.001
@@ -136,7 +167,7 @@ class implementation(): # class to approximate abstract unitary using a series o
       self.gates[i].time += gradstep
       dist2 = self.distance
       self.gates[i].time -= gradstep
-      
+
       self.evolutionGradient[i] = (dist1 - dist2) / gradstep * self.stepSize # minus for descent
 
     # global phase gradient
@@ -145,45 +176,43 @@ class implementation(): # class to approximate abstract unitary using a series o
     self.phase -= gradstep
 
     self.phaseGradient += (dist1 - dist2) / gradstep * self.phaseStepSize # minus for descent
-    
+
     # make every step + random(-1, 1) * self.random
     if self.noise:
       for i in range(self.n):
         for j in range(self.size):
           for k in [0, 1]:
            self.gradient[i][j][k] += self.noise * 2 *(random.random() - 1) * self.gradient[i][j][k]
-  
-  def correctParams(self): # update all parameters based on gradients
+
+  def correct_params(self): # update all parameters based on gradients
     for i in range(self.n):
-      self.gates[i].correctParams(self.gradient[i], self.evolutionGradient[i])
+      self.gates[i].correct_params(self.gradient[i], self.evolutionGradient[i])
     self.phase = self.phaseGradient
-  
+
   @property
   def distance(self): # Frobenius norm
     distance = ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace()
 
     return distance
 
-  def descend(self, steps=1000, trackDistance=False, stupid=True): # perform gradient descent
+  def descend(self, steps=1000, track_distance=False): # perform gradient descent
     distances = [] # distances to track
-    
+
     for i in range(steps):
       distances += [self.distance]
 
-      if stupid:
-        self.stupidCalculateGradient() # calculate gradient
-      else:
-        self.makeC()
-        self.calculateGradient()
-      self.correctParams() # update parameters
-    
-    # most parameters are cyclic - make them in (0, max)
+      self.calculate_gradient() # calculate gradient
+      self.correct_params() # update parameters
+
+    #most parameters are cyclic - make them in (0, max)
+    #print("prior", self.distance)
     for gate in self.gates:
       for basicGate in gate.basicGates:
-        for param in basicGate.params:
-          param = param.real % (2 * math.pi) 
+        basicGate.params[0] = basicGate.params[0].real % (4 * math.pi)
+        basicGate.params[1] = basicGate.params[1].real % (2 * math.pi)
       gate.time = gate.time.real % (4 * math.pi)
     self.phase = self.phase.real % (2 * math.pi)
+    #print("after", self.distance)
 
-    if trackDistance:
+    if track_distance:
       return distances
