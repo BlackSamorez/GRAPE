@@ -1,6 +1,4 @@
-
 import numpy as np
-import cupy as cp
 import math
 import random
 import matplotlib.pyplot as plt
@@ -14,7 +12,6 @@ class BasicGate: # 1-qubit gate
     self.I = np.eye(2, dtype=complex)
     self.X = np.asarray([[0, 1], [1, 0]], dtype=complex)
     self.Y = np.asarray([[0, -1j], [1j, 0]], dtype=complex)
-    self.Z = np.asarray([[1, 0], [0, -1]], dtype=complex)
 
   @property
   def matrix(self): # straightforward matrix representation
@@ -46,15 +43,22 @@ class EvolutionStep: # a combination of 1-qubit operations followed by evolution
     for i in range(self.size - 1):
       self.J[i + 1][i] = 1 # костыль
 
+    self.Z = np.asarray([[1, 0], [0, -1]], dtype=complex)
+    self.sigmas = [np.ones(1) for _ in range(self.size)]
+    for i in range(self.size):
+      for j in range(self.size):
+        if i == j:
+          self.sigmas[j] = np.kron(self.sigmas[j], self.Z)
+        else:
+          self.sigmas[j] = np.kron(self.sigmas[j], np.eye(2))
+
   @property
   def evolution(self): # evolution matrix
-    if self.size == 2:
-      second = -np.eye(2 ** self.size, dtype=np.complex)
-      second[0][0] = 1
-      second[3][3] = 1
-
-      return math.cos(self.time / 2) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(self.time / 2) * second
-    return np.eye(2 ** self.size, dtype=np.complex) # NOT FINISHED
+    evolution = np.eye(2 ** self.size, dtype=np.complex)
+    for i in range(self.size):
+      for j in range(i):
+        evolution = evolution @ (math.cos(math.pi /2 * self.J[i][j] * self.time) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(math.pi /2 * self.J[i][j] * self.time) * self.sigmas[i] @ self.sigmas[j])
+    return evolution # NOT FINISHED
 
   @property
   def matrix(self): # unitary of this evolution step
@@ -90,8 +94,8 @@ class Implementation: # class to approximate abstract unitary using a series of 
     self.evolutionGradient = [0] * self.n # -gradient of cost function by evolution times
     self.phaseGradient = 0 # -gradient of cost function by global phase
     self.gradient = [[[0, 0] for _ in range(self.size)] for _ in range(self.n)] # -gradient of cost function by 1-qubit operations parameters
-    self.stepSize = 0.05 # parameter update by gradient coefficient for 1-qubit operations parameters and evolution times
-    self.phaseStepSize = 0.01 # parameter update by gradient coefficient for global phase (diverges when trying to lower)
+    self.stepSize = 0.01 # parameter update by gradient coefficient for 1-qubit operations parameters and evolution times
+    self.phaseStepSize = 0.002 # parameter update by gradient coefficient for global phase (diverges when trying to lower)
 
   @property
   def time(self): # total approximation time
@@ -122,12 +126,10 @@ class Implementation: # class to approximate abstract unitary using a series of 
         self.gates[i].randomize_params() # randomizes if no input
 
   def save_params(self, filename):
-    #self.size
-    #self.n
     #self.gates[0].basicGates[0].params[0], self.gates[0].basicGates[0].params[1]; ... ; self.gates[0].basicGates[self.size - 1].params[0]; self.gates[0].basicGates[self.size - 1].params[1]; self.gates[0].time
     #...
     #self.gates[self.n - 1].basicGates[0].params[0], self.gates[0].basicGates[0].params[1]; ... ; self.gates[0].basicGates[self.size - 1].params[0]; self.gates[self.n - 1].basicGates[self.size - 1].params[1]; self.gates[self.n - 1].time
-    #self.phase
+    #self.phase; ... ; self.phase
 
     file = open(filename, "w")
     for i in range(self.n):
@@ -210,7 +212,7 @@ class Implementation: # class to approximate abstract unitary using a series of 
       for basicGate in gate.basicGates:
         basicGate.params[0] = basicGate.params[0].real % (4 * math.pi)
         basicGate.params[1] = basicGate.params[1].real % (2 * math.pi)
-      gate.time = gate.time.real % (4 * math.pi)
+      # gate.time = gate.time.real % (4 * math.pi)
     self.phase = self.phase.real % (2 * math.pi)
     #print("after", self.distance)
 
