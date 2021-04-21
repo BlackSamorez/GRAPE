@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import random
-import matplotlib.pyplot as plt
+
 
 class BasicGate: # 1-qubit gate
   def __init__(self, params=None):
@@ -58,7 +58,7 @@ class EvolutionStep: # a combination of 1-qubit operations followed by evolution
     for i in range(self.size):
       for j in range(i):
         evolution = evolution @ (math.cos(math.pi /2 * self.J[i][j] * self.time) * np.eye(2 ** self.size, dtype=np.complex) - 1j * math.sin(math.pi /2 * self.J[i][j] * self.time) * self.sigmas[i] @ self.sigmas[j])
-    return evolution # NOT FINISHED
+    return evolution
 
   @property
   def matrix(self): # unitary of this evolution step
@@ -95,7 +95,6 @@ class Implementation: # class to approximate abstract unitary using a series of 
     self.phaseGradient = 0 # -gradient of cost function by global phase
     self.gradient = [[[0, 0] for _ in range(self.size)] for _ in range(self.n)] # -gradient of cost function by 1-qubit operations parameters
     self.stepSize = 0.01 # parameter update by gradient coefficient for 1-qubit operations parameters and evolution times
-    self.phaseStepSize = 0.002 # parameter update by gradient coefficient for global phase (diverges when trying to lower)
 
   @property
   def time(self): # total approximation time
@@ -113,9 +112,9 @@ class Implementation: # class to approximate abstract unitary using a series of 
     matrix = np.eye(2**self.size, dtype=np.complex)
 
     for i in range(self.n):
-      matrix = matrix @ self.gates[i].matrix * math.e ** (1j * self.phase)
+      matrix = matrix @ self.gates[i].matrix
 
-    return matrix
+    return matrix * math.e ** (1j * self.phase)
 
   def write_params(self, params = None): # writes params for 1-qubit operations
     if params:
@@ -172,13 +171,6 @@ class Implementation: # class to approximate abstract unitary using a series of 
 
       self.evolutionGradient[i] = (dist1 - dist2) / gradstep * self.stepSize # minus for descent
 
-    # global phase gradient
-    self.phase += gradstep
-    dist2 = self.distance
-    self.phase -= gradstep
-
-    self.phaseGradient += (dist1 - dist2) / gradstep * self.phaseStepSize # minus for descent
-
     # make every step + random(-1, 1) * self.random
     if self.noise:
       for i in range(self.n):
@@ -189,7 +181,8 @@ class Implementation: # class to approximate abstract unitary using a series of 
   def correct_params(self): # update all parameters based on gradients
     for i in range(self.n):
       self.gates[i].correct_params(self.gradient[i], self.evolutionGradient[i])
-    self.phase = self.phaseGradient
+
+    self.phase -= np.angle((self.matrix @ self.target_d).trace())
 
   @property
   def distance(self): # Frobenius norm
