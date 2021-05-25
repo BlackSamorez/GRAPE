@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from math import pi
 import random
 from qiskit import QuantumCircuit
 from dataclasses import dataclass
@@ -31,7 +32,7 @@ class BasicGate:  # 1-qubit gate
 
 
 class EvolutionStep:  # a combination of 1-qubit operations followed by evolution
-    def __init__(self, size: int = 2, params=None, time: float = 0.2):
+    def __init__(self, size: int = 2, params=None, time: float = 0):
         if params is None:
             params = []
         self.size: int = size  # number of qubits
@@ -62,7 +63,7 @@ class EvolutionStep:  # a combination of 1-qubit operations followed by evolutio
     def hamiltonian(self):
         hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
         for i in range(self.size):
-            for j in range(i):
+            for j in range(i + 1, self.size):
                 hamiltonian += math.pi / 2 * self.J[i][j] * self.sigmaz(i, j)
         return hamiltonian
 
@@ -70,7 +71,7 @@ class EvolutionStep:  # a combination of 1-qubit operations followed by evolutio
     def evolution(self):  # evolution matrix
         evolution = np.eye(2 ** self.size, dtype=complex)
         for i in range(self.size):
-            for j in range(i):
+            for j in range(i + 1, self.size):
                 evolution = evolution @ (math.cos(math.pi / 2 * self.J[i][j] * self.time) * np.eye(2 ** self.size,
                                                                                                    dtype=complex) - 1j * math.sin(
                     math.pi / 2 * self.J[i][j] * self.time) * self.sigmaz(i, j))
@@ -97,12 +98,15 @@ class EvolutionStep:  # a combination of 1-qubit operations followed by evolutio
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
-
         for i in range(self.size):
             circuit.r(self.basicGates[i].params[0], self.basicGates[i].params[1], circuit.qubits[i])
         circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
-
         return circuit
+    
+    def set_j(self, new_j):
+        for i in range(self.J.shape[0]):
+            for j in range(self.J.shape[1]):
+                self.J[i][j] = new_j[i][j]
 
 
 @dataclass()
@@ -184,7 +188,7 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
 
         return matrix * math.e ** (1j * self.phase)
 
-    def randomize_params(self, params=None):  # randomizes params for 1-qubit operations
+    def randomize_params(self):  # randomizes params for 1-qubit operations
         for i in range(self.__n):
             self.gates[i].randomize_params()
 
@@ -238,14 +242,11 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
             self.correct_params()  # update parameters
 
         # most parameters are cyclic - make them in (0, max)
-        # print("prior", self.distance)
         for gate in self.gates:
             for basicGate in gate.basicGates:
-                basicGate.params[0] = basicGate.params[0].real % (4 * math.pi)
+                basicGate.params[0] = basicGate.params[0].real % (2 * math.pi)
                 basicGate.params[1] = basicGate.params[1].real % (2 * math.pi)
-            # gate.time = gate.time.real % (4 * math.pi)
         self.phase = self.phase.real % (2 * math.pi)
-        # print("after", self.distance)
 
         if track_distance:
             return distances
@@ -260,3 +261,29 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
         angles = [[[gate.basicGates[i].params[0], gate.basicGates[i].params[1]] for i in range(self.__size)] for gate in self.gates]
         times = [gate.time for gate in self.gates]
         return Implementation(name, angles, times, phase=self.phase)
+
+    def set_j(self, new_j):
+        for evolution_step in self.gates:
+            evolution_step.set_j(new_j)
+
+    def make_times_positive(self): # only works for 1 and 2 qubits. Works approximately for 3 qubits
+        if self.__size not in [1, 2, 3]:
+            raise NotImplementedError("Making times possible only on 1, 2 and 3 qubits")
+        else:
+            for i in range(self.__n - 1):
+                if self.gates[i].time < 0:
+                    self.gates[i].time *= -1
+                    print("changed")
+                    if self.__size == 1:
+                        self.gates[i].basicGates[0].params[0] += math.pi
+                        self.gates[i + 1].basicGates[0].params[0] += math.pi
+                    if self.__size == 2:
+                        self.gates[i].basicGates[0].params[0] += math.pi
+                        self.gates[i + 1].basicGates[0].params[0] += math.pi
+                    if self.__size == 3:
+                        self.gates[i].basicGates[1].params[0] += math.pi
+                        self.gates[i + 1].basicGates[1].params[0] += math.pi
+
+
+
+
