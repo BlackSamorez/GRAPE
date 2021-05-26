@@ -30,8 +30,162 @@ class BasicGate:  # 1-qubit gate
         self.params[0] += correction[0]
         self.params[1] += correction[1]
 
+    def normalize_angles(self):
+        self.params[0] = self.params[0].real % (4 * pi)
+        self.params[1] = self.params[1].real % (2 * pi)
 
-class EvolutionStep:  # a combination of 1-qubit operations followed by evolution
+
+class Gate:
+    def __init__(self, size: int = 2, time: float = 0):
+        self.time: float = time
+        self.size: int = size  # number of qubits
+
+        self.__Id = np.eye(2, dtype=complex)
+        self.__X = np.asarray([[0, 1], [1, 0]], dtype=complex)
+        self.__Y = np.asarray([[0, -1j], [1j, 0]], dtype=complex)
+        self.__Z = np.asarray([[1, 0], [0, -1]], dtype=complex)
+
+    @property
+    def matrix(self):
+        raise NotImplementedError()
+
+    def randomize_params(self):
+        raise NotImplementedError()
+
+    def correct_params(self, correction):
+        raise NotImplementedError()
+
+    def to_qiskit(self):
+        raise NotImplementedError()
+
+    def normalize(self):
+        raise NotImplementedError()
+
+
+class Evolution(Gate):
+    def __init__(self, size: int = 2, time: float = 0):
+        super().__init__(size, time)
+
+        self.J = np.zeros((self.size, self.size), dtype=complex)  # interaction matrix
+        for i in range(self.size - 1):
+            self.J[i + 1][i] = 1
+
+    def sigma_z(self, i: int, j: int):
+        matrix = np.ones((1, 1), dtype=complex)
+        for k in range(self.size):
+            if k == i or k == j:
+                matrix = np.kron(matrix, self.__Z)
+            else:
+                matrix = np.kron(matrix, self.__Id)
+        return matrix
+
+    @property
+    def hamiltonian(self):
+        hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
+        for i in range(self.size):
+            for j in range(i + 1, self.size):
+                hamiltonian += math.pi / 2 * self.J[i][j] * self.sigma_z(i, j)
+        return hamiltonian
+
+    @property
+    def matrix(self):  # evolution matrix
+        evolution = np.eye(2 ** self.size, dtype=complex)
+        for i in range(self.size):
+            for j in range(i + 1, self.size):
+                evolution = evolution @ (math.cos(math.pi / 2 * self.J[i][j] * self.time) * np.eye(2 ** self.size,
+                                                                                                   dtype=complex) - 1j * math.sin(
+                    math.pi / 2 * self.J[i][j] * self.time) * self.sigma_z(i, j))
+        return evolution
+
+    def set_j(self, new_j):
+        for i in range(self.J.shape[0]):
+            for j in range(self.J.shape[1]):
+                self.J[i][j] = new_j[i][j]
+
+    def randomize_params(self):
+        self.time = random.random()
+
+    def correct_params(self, correction):
+        self.time += correction
+
+    def to_qiskit(self):
+        circuit = QuantumCircuit(self.size)
+        circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
+        return circuit
+
+    def normalize(self):
+        pass
+
+
+class Kick(Gate):
+    def __init__(self, size: int = 2, params=None):
+        super().__init__(size=size, time=0)
+
+        if params is None:
+            params = [[0, 0] for _ in range(self.size)]
+        self.basic_gates = [BasicGate(param) for param in params]
+
+    @property
+    def matrix(self):
+        matrix = np.ones(1, dtype=complex)
+        for i in range(self.size):
+            matrix = np.kron(self.basic_gates[i].matrix, matrix)
+        return matrix
+
+    def randomize_params(self):
+        for basicGate in self.basic_gates:
+            basicGate.randomize_params()
+
+    def correct_params(self, correction):  # update parameters based on passed corrections
+        for i in range(self.size):
+            self.basic_gates[i].correct_params(correction)
+
+    def to_qiskit(self):
+        circuit = QuantumCircuit(self.size)
+        for i in range(self.size):
+            circuit.r(self.basic_gates[i].params[0], self.basic_gates[i].params[1], circuit.qubits[i])
+        return circuit
+
+    def normalize(self):
+        for basic_gate in self.basic_gates:
+            basic_gate.normalize_angles()
+
+
+class Inversion(Gate):
+    def __init__(self, size: int = 2, qubits = None):
+        super().__init__(size=size, time=0)
+
+        if qubits is None:
+            qubits = []
+        self.qubits = qubits
+
+    @property
+    def matrix(self):
+        matrix = np.ones(1, dtype=complex)
+        for i in range(self.size):
+            if i in self.qubits:
+                matrix = np.kron(self.__X, matrix)
+            else:
+                matrix = np.kron(self.__Id, matrix)
+        return matrix
+
+    def to_qiskit(self):
+        circuit = QuantumCircuit(self.size)
+        for i in self.qubits:
+            circuit.x(i)
+        return circuit
+
+    def randomize_params(self):
+        pass
+
+    def correct_params(self, correction):
+        pass
+
+    def normalize(self):
+        pass
+
+
+'''class EvolutionTmp():  # a combination of 1-qubit operations followed by evolution
     def __init__(self, size: int = 2, params=None, time: float = 0):
         if params is None:
             params = []
@@ -108,6 +262,7 @@ class EvolutionStep:  # a combination of 1-qubit operations followed by evolutio
         for i in range(self.J.shape[0]):
             for j in range(self.J.shape[1]):
                 self.J[i][j] = new_j[i][j]
+'''
 
 
 @dataclass()
@@ -143,7 +298,105 @@ class Implementation:
         self.phase = data[-1][0]
 
 
-class Evolution:  # class to approximate abstract unitary using a series of evolutionStep
+class GradientDescend:
+    def __init__(self, target, n: int = 4, implementation: Implementation = None):
+        self.target = target  # unitary to approximate
+
+        if implementation is not None:
+            raise NotImplementedError()
+        else:
+            self.__size = int(math.log2(self.target.size) / 2)  # number of qubits
+            self.phase = 0  # global phase
+            self.gates = [] # simultaneous gates
+            for _ in range(n):
+                self.gates += [Kick(size=self.__size)]
+                self.gates += [Evolution(size=self.__size)]
+            self.gates += [Kick(size=self.__size)]
+        self.stepSize = 0.01  # gradient-to-change ration
+
+    @property
+    def time(self):  # total approximation time
+        time = 0
+        for gate in self.gates:
+            time += gate.time
+        return time.real
+
+    @property
+    def target_d(self):  # target dagger
+        return self.target.conjugate().transpose()
+
+    @property
+    def matrix(self):  # approximation matrix
+        matrix = np.eye(2 ** self.__size, dtype=complex)
+
+        for gate in self.gates:
+            matrix = gate.matrix @ matrix
+
+        return matrix * math.e ** (1j * self.phase)
+
+    @property
+    def distance(self):  # Frobenius norm
+        return ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace()
+
+    def randomize_params(self):  # randomizes params for 1-qubit operations
+        for gate in self.gates:
+            gate.randomize_params()
+
+    def gradient_step(self):
+        delta = 0.001
+        current_dist = self.distance
+        new_dist = self.distance
+
+        for gate in self.gates:
+            if type(gate) is Evolution:
+                gate.correct_params(delta)
+                new_dist = self.distance
+                gate.correct_params(- delta + (current_dist - new_dist) / delta * self.stepSize)
+            if type(gate) is Kick:
+                for parameter in [0, 1]:
+                    change = [0, 0]
+                    change[parameter] = delta
+                    gate.correct_params(change)
+                    new_dist = self.distance
+                    change[parameter] = - delta + (current_dist - new_dist) / delta * self.stepSize
+                    gate.correct_params(change)
+
+        self.phase -= np.angle((self.matrix @ self.target_d).trace())
+
+    def descend(self, steps=1000, track_distance=False):  # perform gradient descent
+        distances = []  # distances to track
+
+        for i in range(steps):
+            distances += [self.distance]
+            self.gradient_step()
+
+        # most parameters are cyclic - make them in (0, max)
+        for gate in self.gates:
+            gate.normalize()
+
+        self.phase = self.phase.real % (2 * math.pi)
+
+        if track_distance:
+            return distances
+
+    def to_qiskit(self):
+        circuit = QuantumCircuit(self.__size, global_phase=self.phase)
+        for gate in self.gates:
+            circuit += gate.to_qiskit()
+        return circuit
+
+    def set_j(self, new_j):
+        for gate in self.gates:
+            if type(gate) is Evolution:
+                gate.set_j(new_j)
+
+
+
+
+
+
+
+'''class GradientDescentTmp:  # class to approximate abstract unitary using a series of evolutionStep
     def __init__(self, target, n: int = 4, implementation: Implementation = None):
         self.target = target  # unitary to approximate
         self.noise: float = 0.05  # noise levels (see self.stupidCalculateGradient)
@@ -285,7 +538,7 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
                     self.gates[i + 1].basicGates[0].params[0] += math.pi
                 if self.__size == 3:
                     self.gates[i].basicGates[1].params[0] += math.pi
-                    self.gates[i + 1].basicGates[1].params[0] += math.pi
+                    self.gates[i + 1].basicGates[1].params[0] += math.pi'''
 
 
 
