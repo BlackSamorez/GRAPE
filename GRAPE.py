@@ -100,7 +100,8 @@ class EvolutionStep:  # a combination of 1-qubit operations followed by evolutio
         circuit = QuantumCircuit(self.size)
         for i in range(self.size):
             circuit.r(self.basicGates[i].params[0], self.basicGates[i].params[1], circuit.qubits[i])
-        circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
+        if self.time != 0:
+            circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
         return circuit
     
     def set_j(self, new_j):
@@ -167,6 +168,7 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
                          range(self.__n)]  # -gradient of cost function by 1-qubit operations parameters
         self.stepSize = 0.01  # parameter update by gradient coefficient for 1-qubit operations parameters and
         # evolution times
+        self.fixed_end = True
 
     @property
     def time(self):  # total approximation time
@@ -223,7 +225,8 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
 
     def correct_params(self):  # update all parameters based on gradients
         for i in range(self.__n):
-            self.gates[i].correct_params(self.gradient[i], self.evolutionGradient[i])
+            if i != self.__n - 1 or not self.fixed_end:
+                self.gates[i].correct_params(self.gradient[i], self.evolutionGradient[i])
         self.phase -= np.angle((self.matrix @ self.target_d).trace())
 
     @property
@@ -244,7 +247,7 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
         # most parameters are cyclic - make them in (0, max)
         for gate in self.gates:
             for basicGate in gate.basicGates:
-                basicGate.params[0] = basicGate.params[0].real % (2 * math.pi)
+                basicGate.params[0] = basicGate.params[0].real % (4 * math.pi)
                 basicGate.params[1] = basicGate.params[1].real % (2 * math.pi)
         self.phase = self.phase.real % (2 * math.pi)
 
@@ -267,22 +270,22 @@ class Evolution:  # class to approximate abstract unitary using a series of evol
             evolution_step.set_j(new_j)
 
     def make_times_positive(self): # only works for 1 and 2 qubits. Works approximately for 3 qubits
+        if not self.fixed_end:
+            raise Exception("Making times positive possible only with fixed end")
         if self.__size not in [1, 2, 3]:
-            raise NotImplementedError("Making times possible only on 1, 2 and 3 qubits")
-        else:
-            for i in range(self.__n - 1):
-                if self.gates[i].time < 0:
-                    self.gates[i].time *= -1
-                    print("changed")
-                    if self.__size == 1:
-                        self.gates[i].basicGates[0].params[0] += math.pi
-                        self.gates[i + 1].basicGates[0].params[0] += math.pi
-                    if self.__size == 2:
-                        self.gates[i].basicGates[0].params[0] += math.pi
-                        self.gates[i + 1].basicGates[0].params[0] += math.pi
-                    if self.__size == 3:
-                        self.gates[i].basicGates[1].params[0] += math.pi
-                        self.gates[i + 1].basicGates[1].params[0] += math.pi
+            raise Exception("Making times positive possible only on 1, 2 and 3 qubits")
+        for i in range(self.__n - 1):
+            if self.gates[i].time < 0:
+                self.gates[i].time *= -1
+                if self.__size == 1:
+                    self.gates[i].basicGates[0].params[0] += math.pi
+                    self.gates[i + 1].basicGates[0].params[0] += math.pi
+                if self.__size == 2:
+                    self.gates[i].basicGates[0].params[0] += math.pi
+                    self.gates[i + 1].basicGates[0].params[0] += math.pi
+                if self.__size == 3:
+                    self.gates[i].basicGates[1].params[0] += math.pi
+                    self.gates[i + 1].basicGates[1].params[0] += math.pi
 
 
 
