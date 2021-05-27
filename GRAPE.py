@@ -51,7 +51,10 @@ class Gate:
     def randomize_params(self):
         raise NotImplementedError()
 
-    def correct_params(self, correction):
+    def set_correction(self, correction):
+        raise NotImplementedError()
+
+    def correct_params(self):
         raise NotImplementedError()
 
     def to_qiskit(self):
@@ -68,6 +71,7 @@ class Evolution(Gate):
         self.J = np.zeros((self.size, self.size), dtype=complex)  # interaction matrix
         for i in range(self.size - 1):
             self.J[i + 1][i] = 1
+        self.correction = 0
 
     def sigma_z(self, i: int, j: int):
         matrix = np.ones((1, 1), dtype=complex)
@@ -104,8 +108,11 @@ class Evolution(Gate):
     def randomize_params(self):
         self.time = random.random()
 
-    def correct_params(self, correction):
-        self.time += correction
+    def set_correction(self, correction):
+        self.correction = correction
+
+    def correct_params(self):
+        self.time += self.correction
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -123,6 +130,7 @@ class Kick(Gate):
         if params is None:
             params = [[0, 0] for _ in range(self.size)]
         self.basic_gates = [BasicGate(param) for param in params]
+        self.correction = [[0, 0] for _ in range(self.size)]
 
     @property
     def matrix(self):
@@ -135,9 +143,14 @@ class Kick(Gate):
         for basicGate in self.basic_gates:
             basicGate.randomize_params()
 
-    def correct_params(self, correction):  # update parameters based on passed corrections
+    def set_correction(self, correction):
         for i in range(self.size):
-            self.basic_gates[i].correct_params(correction)
+            self.correction[i][0] = correction[i][0]
+            self.correction[i][1] = correction[i][1]
+
+    def correct_params(self):  # update parameters based on passed corrections
+        for i in range(self.size):
+            self.basic_gates[i].correct_params(self.correction[i])
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -177,7 +190,10 @@ class Inversion(Gate):
     def randomize_params(self):
         pass
 
-    def correct_params(self, correction):
+    def set_correction(self, correction):
+        pass
+
+    def correct_params(self):
         pass
 
     def normalize(self):
@@ -230,7 +246,7 @@ class GradientDescend:
                 self.gates += [Kick(size=self.__size)]
                 self.gates += [Evolution(size=self.__size)]
             self.gates += [Kick(size=self.__size)]
-        self.stepSize = 0.001  # gradient-to-change ration
+        self.stepSize = 0.01  # gradient-to-change ration
 
     @property
     def time(self):  # total approximation time
@@ -265,19 +281,26 @@ class GradientDescend:
         current_dist = self.distance
         new_dist = self.distance
 
+        gradient = [[] for _ in self.gates]
+
         for gate in self.gates:
             if type(gate) is Evolution:
                 gate.time += delta
                 new_dist = self.distance
                 gate.time -= delta
-                gate.time += (current_dist - new_dist) / delta * self.stepSize
+                gate.set_correction((current_dist - new_dist) / delta * self.stepSize)
             if type(gate) is Kick:
+                correction = [[0, 0] for _ in range(gate.size)]
                 for qubit in range(self.__size):
                     for parameter in [0, 1]:
                         gate.basic_gates[qubit].params[parameter] += delta
                         new_dist = self.distance
                         gate.basic_gates[qubit].params[parameter] -= delta
-                        gate.basic_gates[qubit].params[parameter] += (current_dist - new_dist) / delta * self.stepSize
+                        correction[qubit][parameter] = (current_dist - new_dist) / delta * self.stepSize
+                gate.set_correction(correction)
+
+        for gate in self.gates:
+            gate.correct_params()
         self.phase -= np.angle((self.matrix @ self.target_d).trace())
 
     def descend(self, steps=1000, track_distance=False):  # perform gradient descent
@@ -315,16 +338,39 @@ class GradientDescend:
             for i in range(len(self.gates)):
                 if type(self.gates[i]) is Evolution and self.gates[i].time < 0:
                     if type(self.gates[i + 1]) is Inversion:
+                        # print(f"popped inversion at {i}")
                         self.gates[i].time *= -1
                         self.gates.pop(i + 1)
                         self.gates.pop(i - 1)
                         break
                     if type(self.gates[i + 1]) is Kick:
+                        # print(f"added inversion at {i}")
                         self.gates[i].time *= -1
                         self.gates.insert(i + 1, Inversion(self.__size, [1]))
-                        self.gates.insert(i - 1, Inversion(self.__size, [1]))
+                        self.gates.insert(i, Inversion(self.__size, [1]))
                         break
                 if i == len(self.gates) - 1:
                     all_positive = True
 
-
+    def text(self, filename=None):
+        str = f"{self.__size}\n"
+        for gate in self.gates:
+            if type(gate) is Evolution:
+                str += f"Evolution {float(gate.time)} \n"
+            if type(gate) is Kick:
+                str += "Kick "
+                for basic_gate in gate.basic_gates:
+                    str += f"{basic_gate.params[0]} {basic_gate.params[1]} "
+                str += "\n"
+            if type(gate) is Inversion:
+                str += "Inversion "
+                for qubit in gate.qubits:
+                    str += f"{qubit} "
+                str += "\n"
+        if filename is not None:
+            file = open(filename, "w")
+            file.write(str)
+            file.close()
+            return
+        else:
+            return str
