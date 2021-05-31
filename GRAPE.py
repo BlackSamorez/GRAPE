@@ -62,6 +62,9 @@ class Gate:
     def normalize(self):
         raise NotImplementedError()
 
+    def fake_circuit(self):
+        raise NotImplementedError()
+
 
 class Evolution(Gate):
     def __init__(self, size: int = 2, time: float = 0):
@@ -121,6 +124,9 @@ class Evolution(Gate):
     def normalize(self):
         pass
 
+    def fake_circuit(self):
+        return self.to_qiskit()
+
 
 class Kick(Gate):
     def __init__(self, size: int = 2, params=None):
@@ -161,6 +167,12 @@ class Kick(Gate):
         for basic_gate in self.basic_gates:
             basic_gate.normalize_angles()
 
+    def fake_circuit(self):
+        circuit = QuantumCircuit(self.size)
+        for i in range(self.size):
+            circuit.r(self.basic_gates[i].params[0] * 2 / math.pi, self.basic_gates[i].params[1] * 180 / math.pi, circuit.qubits[i])
+        return circuit
+
 
 class Inversion(Gate):
     def __init__(self, size: int = 2, qubits = None):
@@ -198,9 +210,12 @@ class Inversion(Gate):
     def normalize(self):
         pass
 
+    def fake_circuit(self):
+        return self.to_qiskit()
+
 
 class GradientDescend:
-    def __init__(self, target, n: int = 4, filename=None):
+    def __init__(self, target, n: int = 4, filename=None, device_filename=None):
         self.target = target  # unitary to approximate
 
         if filename is not None:
@@ -431,6 +446,15 @@ class GradientDescend:
                 j = np.asarray(data[1:], dtype=float).reshape((self.__size, self.__size))
                 self.set_j(j)
         file.close()
+
+    def fake_circuit(self):
+        circuit = QuantumCircuit(self.__size, global_phase=self.phase)
+        for gate in self.gates:
+            circuit += gate.fake_circuit()
+        return circuit
+
+
+
 
 
 
