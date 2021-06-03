@@ -394,21 +394,26 @@ class GradientDescend:
         print("\n")
 
     def to_device_text(self, filename=None):
+        if self.__size != 2:
+            raise NotImplementedError()
         str = f"{self.__size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
             if type(gate) is Evolution:
                 any_evolution = gate
-                str += f"Evolution {gate.time.real} \n"
+                str += f"Evolution {gate.time.real * gate.J[0][1].real} \n"
             if type(gate) is Kick:
                 str += "Kick "
                 for basic_gate in gate.basic_gates:
-                    str += f"{2 * basic_gate.params[0].real / math.pi} {180 * basic_gate.params[1].real / math.pi} "
+                    str += f"{basic_gate.params[0].real} {basic_gate.params[1].real} "
                 str += "\n"
             if type(gate) is Inversion:
-                str += "Inversion "
-                for qubit in gate.qubits:
-                    str += f"{qubit} "
+                str += "Kick "
+                for qubit in range(self.__size):
+                    if qubit in gate.qubits:
+                        str += f"{math.pi} {0} "
+                    else:
+                        str += "0 0 "
                 str += "\n"
 
         str += "J "
@@ -425,33 +430,6 @@ class GradientDescend:
         else:
             return str
 
-    def read_device_text(self, filename):
-        self.gates = []
-        file = open(filename, "r")
-        lines = file.readlines()
-        self.__size = int(lines[0].split()[0])
-        self.phase = float(lines[0].split()[1])
-        for i in range(1, len(lines)):
-            data = lines[i].split()
-            if data[0] == "Evolution":
-                self.gates += [Evolution(time=float(data[1]))]
-            if data[0] == "Kick":
-                params = []
-                for j in range(self.__size):
-                    params += [[float(data[2 * j + 1]) * math.pi / 2, float(data[2 * j + 2]) * math.pi / 180]]
-                self.gates += [Kick(params=params)]
-            if data[0] == "Inversion":
-                self.gates += [Inversion(qubits=[int(qubit) for qubit in data[1:]])]
-            if data[0] == "J":
-                j = np.asarray(data[1:], dtype=float).reshape((self.__size, self.__size))
-                self.set_j(j)
-        file.close()
-
-    def fake_circuit(self):
-        circuit = QuantumCircuit(self.__size, global_phase=self.phase)
-        for gate in self.gates:
-            circuit += gate.fake_circuit()
-        return circuit
 
 
 
