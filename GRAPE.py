@@ -66,7 +66,7 @@ class Gate:
         raise NotImplementedError()
 
 
-class Evolution(Gate):
+class Delay(Gate):
     def __init__(self, size: int = 2, time: float = 0):
         super().__init__(size, time)
 
@@ -128,7 +128,7 @@ class Evolution(Gate):
         return self.to_qiskit()
 
 
-class Kick(Gate):
+class Pulse(Gate):
     def __init__(self, size: int = 2, params=None):
         super().__init__(size=size, time=0)
 
@@ -225,9 +225,9 @@ class GradientDescend:
             self.phase = 0  # global phase
             self.gates = [] # simultaneous gates
             for _ in range(n):
-                self.gates += [Kick(size=self.__size)]
-                self.gates += [Evolution(size=self.__size)]
-            self.gates += [Kick(size=self.__size)]
+                self.gates += [Pulse(size=self.__size)]
+                self.gates += [Delay(size=self.__size)]
+            self.gates += [Pulse(size=self.__size)]
         self.stepSize = 0.01  # gradient-to-change ration
 
     @property
@@ -266,12 +266,12 @@ class GradientDescend:
         gradient = [[] for _ in self.gates]
 
         for gate in self.gates:
-            if type(gate) is Evolution:
+            if type(gate) is Delay:
                 gate.time += delta
                 new_dist = self.distance
                 gate.time -= delta
                 gate.set_correction((current_dist - new_dist) / delta * self.stepSize)
-            if type(gate) is Kick:
+            if type(gate) is Pulse:
                 correction = [[0, 0] for _ in range(gate.size)]
                 for qubit in range(self.__size):
                     for parameter in [0, 1]:
@@ -309,7 +309,7 @@ class GradientDescend:
 
     def set_j(self, new_j):
         for gate in self.gates:
-            if type(gate) is Evolution:
+            if type(gate) is Delay:
                 gate.set_j(new_j)
 
     def make_times_positive(self):
@@ -318,14 +318,14 @@ class GradientDescend:
         all_positive = False
         while not all_positive:
             for i in range(len(self.gates)):
-                if type(self.gates[i]) is Evolution and self.gates[i].time < 0:
+                if type(self.gates[i]) is Delay and self.gates[i].time < 0:
                     if type(self.gates[i + 1]) is Inversion:
                         # print(f"popped inversion at {i}")
                         self.gates[i].time *= -1
                         self.gates.pop(i + 1)
                         self.gates.pop(i - 1)
                         break
-                    if type(self.gates[i + 1]) is Kick:
+                    if type(self.gates[i + 1]) is Pulse:
                         # print(f"added inversion at {i}")
                         self.gates[i].time *= -1
                         self.gates.insert(i + 1, Inversion(self.__size, [1]))
@@ -338,16 +338,16 @@ class GradientDescend:
         str = f"{self.__size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
-            if type(gate) is Evolution:
+            if type(gate) is Delay:
                 any_evolution = gate
-                str += f"Evolution {gate.time.real} \n"
-            if type(gate) is Kick:
-                str += "Kick "
+                str += f"delay {gate.time.real} \n"
+            if type(gate) is Pulse:
+                str += "pulse "
                 for basic_gate in gate.basic_gates:
                     str += f"{basic_gate.params[0].real} {basic_gate.params[1].real} "
                 str += "\n"
             if type(gate) is Inversion:
-                str += "Inversion "
+                str += "inversion "
                 for qubit in gate.qubits:
                     str += f"{qubit} "
                 str += "\n"
@@ -374,14 +374,14 @@ class GradientDescend:
         self.phase = float(lines[0].split()[1])
         for i in range(1, len(lines)):
             data = lines[i].split()
-            if data[0] == "Evolution":
-                self.gates += [Evolution(time=float(data[1]))]
-            if data[0] == "Kick":
+            if data[0] == "delay" or data[0] == "Evolution":
+                self.gates += [Delay(time=float(data[1]))]
+            if data[0] == "pulse" or data[0] == "Kick":
                 params = []
                 for j in range(self.__size):
                     params += [[float(data[2 * j + 1]), float(data[2 * j + 2])]]
-                self.gates += [Kick(params=params)]
-            if data[0] == "Inversion":
+                self.gates += [Pulse(params=params)]
+            if data[0] == "inversion" or data[0] == "Inversion":
                 self.gates += [Inversion(qubits=[int(qubit) for qubit in data[1:]])]
             if data[0] == "J":
                 j = np.asarray(data[1:], dtype=float).reshape((self.__size, self.__size))
@@ -399,10 +399,10 @@ class GradientDescend:
         str = f"{self.__size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
-            if type(gate) is Evolution:
+            if type(gate) is Delay:
                 any_evolution = gate
                 str += f"Evolution {gate.time.real * gate.J[0][1].real} \n"
-            if type(gate) is Kick:
+            if type(gate) is Pulse:
                 str += "Kick "
                 for basic_gate in gate.basic_gates:
                     str += f"{basic_gate.params[0].real} {basic_gate.params[1].real} "
