@@ -18,7 +18,7 @@ class BasicGate:  # 1-qubit gate
     @property
     def matrix(self):  # straightforward matrix representation
         matrix = math.cos(self.params[0] / 2) * self._id - 1j * math.sin(self.params[0] / 2) * (
-                    math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
+                math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
 
         return matrix
 
@@ -70,9 +70,10 @@ class Delay(Gate):
     def __init__(self, size: int = 2, time: float = 0):
         super().__init__(size, time)
 
-        self.J = np.zeros((self.size, self.size), dtype=complex)  # interaction matrix
+        self.j = np.zeros((self.size, self.size), dtype=complex)  # interaction matrix
         for i in range(self.size - 1):
-            self.J[i + 1][i] = 1
+            for j in range(i + 1, self.size):
+                self.j[i][j] = 1
         self.correction = 0
 
     def sigma_z(self, i: int, j: int):
@@ -89,7 +90,7 @@ class Delay(Gate):
         hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
         for i in range(self.size):
             for j in range(i + 1, self.size):
-                hamiltonian += math.pi / 2 * self.J[i][j] * self.sigma_z(i, j)
+                hamiltonian += math.pi / 2 * self.j[i][j] * self.sigma_z(i, j)
         return hamiltonian
 
     @property
@@ -97,15 +98,15 @@ class Delay(Gate):
         evolution = np.eye(2 ** self.size, dtype=complex)
         for i in range(self.size):
             for j in range(i + 1, self.size):
-                evolution = evolution @ (math.cos(math.pi / 2 * self.J[i][j] * self.time) * np.eye(2 ** self.size,
+                evolution = evolution @ (math.cos(math.pi / 2 * self.j[i][j] * self.time) * np.eye(2 ** self.size,
                                                                                                    dtype=complex) - 1j * math.sin(
-                    math.pi / 2 * self.J[i][j] * self.time) * self.sigma_z(i, j))
+                    math.pi / 2 * self.j[i][j] * self.time) * self.sigma_z(i, j))
         return evolution
 
     def set_j(self, new_j):
-        for i in range(self.J.shape[0]):
-            for j in range(self.J.shape[1]):
-                self.J[i][j] = new_j[i][j]
+        for i in range(self.j.shape[0]):
+            for j in range(self.j.shape[1]):
+                self.j[i][j] = new_j[i][j]
 
     def randomize_params(self):
         self.time = random.random()
@@ -170,12 +171,13 @@ class Pulse(Gate):
     def fake_circuit(self):
         circuit = QuantumCircuit(self.size)
         for i in range(self.size):
-            circuit.r(self.basic_gates[i].params[0] * 2 / math.pi, self.basic_gates[i].params[1] * 180 / math.pi, circuit.qubits[i])
+            circuit.r(self.basic_gates[i].params[0] * 2 / math.pi, self.basic_gates[i].params[1] * 180 / math.pi,
+                      circuit.qubits[i])
         return circuit
 
 
 class Inversion(Gate):
-    def __init__(self, size: int = 2, qubits = None):
+    def __init__(self, size: int = 2, qubits=None):
         super().__init__(size=size, time=0)
 
         if qubits is None:
@@ -214,8 +216,8 @@ class Inversion(Gate):
         return self.to_qiskit()
 
 
-class GradientDescend:
-    def __init__(self, target, n: int = 4, filename=None, device_filename=None):
+class GradientDescent:
+    def __init__(self, target, n: int = 4, filename=None):
         self.target = target  # unitary to approximate
 
         if filename is not None:
@@ -223,12 +225,13 @@ class GradientDescend:
         else:
             self.__size = int(math.log2(self.target.size) / 2)  # number of qubits
             self.phase = 0  # global phase
-            self.gates = [] # simultaneous gates
+            self.gates = []  # simultaneous gates
             for _ in range(n):
                 self.gates += [Pulse(size=self.__size)]
                 self.gates += [Delay(size=self.__size)]
             self.gates += [Pulse(size=self.__size)]
         self.stepSize = 0.01  # gradient-to-change ration
+        self.noise = 0
 
     @property
     def time(self):  # total approximation time
@@ -253,6 +256,12 @@ class GradientDescend:
     @property
     def distance(self):  # Frobenius norm
         return ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace()
+
+    @property
+    def j(self):
+        for gate in self.gates:
+            if type(gate) is Delay:
+                return gate.j
 
     def randomize_params(self):  # randomizes params for 1-qubit operations
         for gate in self.gates:
@@ -279,6 +288,7 @@ class GradientDescend:
                         new_dist = self.distance
                         gate.basic_gates[qubit].params[parameter] -= delta
                         correction[qubit][parameter] = (current_dist - new_dist) / delta * self.stepSize
+                        correction[qubit][parameter] *= (1 + random.uniform(-self.noise, self.noise))
                 gate.set_correction(correction)
 
         for gate in self.gates:
@@ -431,10 +441,40 @@ class GradientDescend:
             return str
 
 
+class ThreeQubitGradient(GradientDescent):
+    def __init__(self, target, n: int = 4, filename=None):
+        super().__init__(target=target, n=n, filename=filename)
+        # if self.__size != 3:
+        #     raise NotImplementedError(f"Using this class to implement {self.__size} qubit scheme when 3 is assumed")
 
+    def hyper_step(self):  # this is needed to overcome the weakness of 0-2 qubit interaction
+        j = self.j
+        time_changes = []
 
+        for gate in self.gates:
+            if type(gate) is Delay:
+                d = self.distance
+                gate.time += 4 / j[1][2]
+                d_up = self.distance
+                gate.time -= 8 / j[1][2]
+                d_down = self.distance
+                gate.time += 4 / j[1][2]
 
+                p_up = math.e ** (- (d_up - d) / 16 * 3)
+                if np.random.binomial(1, p_up):
+                    time_changes += [4 / j[1][2]]
+                else:
+                    time_changes += [0]
 
+                p_down = math.e ** (- (d_down - d) / 16 * 3)
+                if np.random.binomial(1, p_down):
+                    time_changes[-1] += 4 / j[1][2]
+                else:
+                    time_changes[-1] += 0
 
-
+        i = 0
+        for gate in self.gates:
+            if type(gate) is Delay:
+                gate.time += time_changes[i]
+                i += 1
 
