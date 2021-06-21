@@ -109,7 +109,7 @@ class Delay(Gate):
                 self.j[i][j] = new_j[i][j]
 
     def randomize_params(self):
-        self.time = random.random()
+        self.time = random.uniform(0, 0.3 / 0.00148)
 
     def set_correction(self, correction):
         self.correction = correction
@@ -223,13 +223,13 @@ class GradientDescent:
         if filename is not None:
             self.read_text(filename)
         else:
-            self.__size = int(math.log2(self.target.size) / 2)  # number of qubits
+            self._size = int(math.log2(self.target.size) / 2)  # number of qubits
             self.phase = 0  # global phase
             self.gates = []  # simultaneous gates
             for _ in range(n):
-                self.gates += [Pulse(size=self.__size)]
-                self.gates += [Delay(size=self.__size)]
-            self.gates += [Pulse(size=self.__size)]
+                self.gates += [Pulse(size=self._size)]
+                self.gates += [Delay(size=self._size)]
+            self.gates += [Pulse(size=self._size)]
         self.stepSize = 0.01  # gradient-to-change ration
         self.noise = 0
 
@@ -246,7 +246,7 @@ class GradientDescent:
 
     @property
     def matrix(self):  # approximation matrix
-        matrix = np.eye(2 ** self.__size, dtype=complex)
+        matrix = np.eye(2 ** self._size, dtype=complex)
 
         for gate in self.gates:
             matrix = gate.matrix @ matrix
@@ -282,7 +282,7 @@ class GradientDescent:
                 gate.set_correction((current_dist - new_dist) / delta * self.stepSize)
             if type(gate) is Pulse:
                 correction = [[0, 0] for _ in range(gate.size)]
-                for qubit in range(self.__size):
+                for qubit in range(self._size):
                     for parameter in [0, 1]:
                         gate.basic_gates[qubit].params[parameter] += delta
                         new_dist = self.distance
@@ -312,7 +312,7 @@ class GradientDescent:
             return distances
 
     def to_qiskit(self):
-        circuit = QuantumCircuit(self.__size, global_phase=self.phase)
+        circuit = QuantumCircuit(self._size, global_phase=self.phase)
         for gate in self.gates:
             circuit += gate.to_qiskit()
         return circuit
@@ -323,7 +323,7 @@ class GradientDescent:
                 gate.set_j(new_j)
 
     def make_times_positive(self):
-        if self.__size not in [1, 2, 3]:
+        if self._size not in [1, 2, 3]:
             raise NotImplementedError("Making time positive only possible for 1, 2 and 3 qubit systems")
         all_positive = False
         while not all_positive:
@@ -338,14 +338,14 @@ class GradientDescent:
                     if type(self.gates[i + 1]) is Pulse:
                         # print(f"added inversion at {i}")
                         self.gates[i].time *= -1
-                        self.gates.insert(i + 1, Inversion(self.__size, [1]))
-                        self.gates.insert(i, Inversion(self.__size, [1]))
+                        self.gates.insert(i + 1, Inversion(self._size, [1]))
+                        self.gates.insert(i, Inversion(self._size, [1]))
                         break
                 if i == len(self.gates) - 1:
                     all_positive = True
 
     def to_text(self, filename=None):
-        str = f"{self.__size} {self.phase}\n"
+        str = f"{self._size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
             if type(gate) is Delay:
@@ -363,9 +363,9 @@ class GradientDescent:
                 str += "\n"
 
         str += "J "
-        for i in range(self.__size):
-            for j in range(self.__size):
-                str += f"{any_evolution.J[i][j].real} "
+        for i in range(self._size):
+            for j in range(self._size):
+                str += f"{any_evolution.j[i][j].real} "
         str += "\n"
 
         if filename is not None:
@@ -380,21 +380,21 @@ class GradientDescent:
         self.gates = []
         file = open(filename, "r")
         lines = file.readlines()
-        self.__size = int(lines[0].split()[0])
+        self._size = int(lines[0].split()[0])
         self.phase = float(lines[0].split()[1])
         for i in range(1, len(lines)):
             data = lines[i].split()
             if data[0] == "delay" or data[0] == "Evolution":
-                self.gates += [Delay(time=float(data[1]))]
+                self.gates += [Delay(size=self._size, time=float(data[1]))]
             if data[0] == "pulse" or data[0] == "Kick":
                 params = []
-                for j in range(self.__size):
+                for j in range(self._size):
                     params += [[float(data[2 * j + 1]), float(data[2 * j + 2])]]
-                self.gates += [Pulse(params=params)]
+                self.gates += [Pulse(size=self._size, params=params)]
             if data[0] == "inversion" or data[0] == "Inversion":
-                self.gates += [Inversion(qubits=[int(qubit) for qubit in data[1:]])]
+                self.gates += [Inversion(size=self._size, qubits=[int(qubit) for qubit in data[1:]])]
             if data[0] == "J":
-                j = np.asarray(data[1:], dtype=float).reshape((self.__size, self.__size))
+                j = np.asarray(data[1:], dtype=float).reshape((self._size, self._size))
                 self.set_j(j)
         file.close()
 
@@ -404,9 +404,9 @@ class GradientDescent:
         print("\n")
 
     def to_device_text(self, filename=None):
-        if self.__size != 2:
+        if self._size != 2:
             raise NotImplementedError()
-        str = f"{self.__size} {self.phase}\n"
+        str = f"{self._size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
             if type(gate) is Delay:
@@ -419,7 +419,7 @@ class GradientDescent:
                 str += "\n"
             if type(gate) is Inversion:
                 str += "Kick "
-                for qubit in range(self.__size):
+                for qubit in range(self._size):
                     if qubit in gate.qubits:
                         str += f"{math.pi} {0} "
                     else:
@@ -427,8 +427,8 @@ class GradientDescent:
                 str += "\n"
 
         str += "J "
-        for i in range(self.__size):
-            for j in range(self.__size):
+        for i in range(self._size):
+            for j in range(self._size):
                 str += f"{any_evolution.J[i][j].real} "
         str += "\n"
 
@@ -439,42 +439,3 @@ class GradientDescent:
             return
         else:
             return str
-
-
-class ThreeQubitGradient(GradientDescent):
-    def __init__(self, target, n: int = 4, filename=None):
-        super().__init__(target=target, n=n, filename=filename)
-        # if self.__size != 3:
-        #     raise NotImplementedError(f"Using this class to implement {self.__size} qubit scheme when 3 is assumed")
-
-    def hyper_step(self):  # this is needed to overcome the weakness of 0-2 qubit interaction
-        j = self.j
-        time_changes = []
-
-        for gate in self.gates:
-            if type(gate) is Delay:
-                d = self.distance
-                gate.time += 4 / j[1][2]
-                d_up = self.distance
-                gate.time -= 8 / j[1][2]
-                d_down = self.distance
-                gate.time += 4 / j[1][2]
-
-                p_up = math.e ** (- (d_up - d) / 16 * 3)
-                if np.random.binomial(1, p_up):
-                    time_changes += [4 / j[1][2]]
-                else:
-                    time_changes += [0]
-
-                p_down = math.e ** (- (d_down - d) / 16 * 3)
-                if np.random.binomial(1, p_down):
-                    time_changes[-1] += 4 / j[1][2]
-                else:
-                    time_changes[-1] += 0
-
-        i = 0
-        for gate in self.gates:
-            if type(gate) is Delay:
-                gate.time += time_changes[i]
-                i += 1
-
