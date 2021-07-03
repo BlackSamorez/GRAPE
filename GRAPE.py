@@ -35,7 +35,7 @@ class BasicGate:  # 1-qubit gate
 
 
 class Gate:
-    def __init__(self, size: int = 2, time: float = 0):
+    def __init__(self, size: int, time: float = 0):
         self.time: float = time
         self.size: int = size  # number of qubits
         self._id = np.eye(2, dtype=complex)
@@ -67,7 +67,7 @@ class Gate:
 
 
 class Delay(Gate):
-    def __init__(self, size: int = 2, time: float = 0):
+    def __init__(self, size: int, time: float = 0):
         super().__init__(size, time)
 
         self.j = np.zeros((self.size, self.size), dtype=complex)  # interaction matrix
@@ -130,7 +130,7 @@ class Delay(Gate):
 
 
 class Pulse(Gate):
-    def __init__(self, size: int = 2, params=None):
+    def __init__(self, size: int, params=None):
         super().__init__(size=size, time=0)
 
         if params is None:
@@ -177,7 +177,7 @@ class Pulse(Gate):
 
 
 class Inversion(Gate):
-    def __init__(self, size: int = 2, qubits=None):
+    def __init__(self, size: int, qubits=None):
         super().__init__(size=size, time=0)
 
         if qubits is None:
