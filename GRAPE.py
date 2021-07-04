@@ -19,8 +19,13 @@ class BasicGate:  # 1-qubit gate
     def matrix(self):  # straightforward matrix representation
         matrix = math.cos(self.params[0] / 2) * self._id - 1j * math.sin(self.params[0] / 2) * (
                 math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
-
         return matrix
+
+    @property
+    def derivative(self):
+        d_theta = -1/2 * math.sin(self.params[0] / 2) * self._id - 1j / 2 * math.cos(self.params[0] / 2) * (math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
+        d_phi = 1j * math.sin(self.params[0] / 2) * (math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
+        return [d_theta, d_phi]
 
     def randomize_params(self):
         self.params = [2 * math.pi * random.random(), 2 * math.pi * random.random()]
@@ -45,6 +50,12 @@ class Gate:
 
     @property
     def matrix(self):
+        raise NotImplementedError()
+
+    def calculate_derivative(self):
+        raise NotImplementedError()
+
+    def apply_derivative(self, coefficient):
         raise NotImplementedError()
 
     def randomize_params(self):
@@ -75,6 +86,7 @@ class Delay(Gate):
             for j in range(i + 1, self.size):
                 self.j[i][j] = 1
         self.correction = 0
+        self.derivative = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
 
     def sigma_z(self, i: int, j: int):
         matrix = np.ones((1, 1), dtype=complex)
@@ -102,6 +114,9 @@ class Delay(Gate):
                                                                                                    dtype=complex) - 1j * math.sin(
                     math.pi / 2 * self.j[i][j] * self.time) * self.sigma_z(i, j))
         return evolution
+
+    def calculate_derivative(self):
+        self.derivative = -1j * self.hamiltonian @ self.matrix
 
     def set_j(self, new_j):
         for i in range(self.j.shape[0]):
@@ -137,6 +152,7 @@ class Pulse(Gate):
             params = [[0, 0] for _ in range(self.size)]
         self.basic_gates = [BasicGate(param) for param in params]
         self.correction = [[0, 0] for _ in range(self.size)]
+        self.derivative = [np.zeros((2 ** self.size, 2 ** self.size), dtype=complex) for _ in range(self.size)]
 
     @property
     def matrix(self):
@@ -144,6 +160,9 @@ class Pulse(Gate):
         for i in range(self.size):
             matrix = np.kron(self.basic_gates[i].matrix, matrix)
         return matrix
+
+    def calculate_derivative(self):
+
 
     def randomize_params(self):
         for basicGate in self.basic_gates:
@@ -254,6 +273,10 @@ class GradientDescent:
         return matrix * math.e ** (1j * self.phase)
 
     @property
+    def time_sensitive_distance(self):  # Frobenius norm with total time cost factor
+        return ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace() * math.e ** (self.time / 500)
+
+    @property
     def distance(self):  # Frobenius norm
         return ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace()
 
@@ -267,17 +290,22 @@ class GradientDescent:
         for gate in self.gates:
             gate.randomize_params()
 
-    def gradient_step(self):
+    def gradient_step(self, time_sensitive=False):
         delta = 0.001
-        current_dist = self.distance
-        new_dist = self.distance
-
-        gradient = [[] for _ in self.gates]
+        if time_sensitive:
+            current_dist = self.time_sensitive_distance
+            new_dist = self.time_sensitive_distance
+        else:
+            current_dist = self.distance
+            new_dist = self.distance
 
         for gate in self.gates:
             if type(gate) is Delay:
                 gate.time += delta
-                new_dist = self.distance
+                if time_sensitive:
+                    new_dist = self.time_sensitive_distance
+                else:
+                    new_dist = self.distance
                 gate.time -= delta
                 gate.set_correction((current_dist - new_dist) / delta * self.stepSize)
             if type(gate) is Pulse:
@@ -285,22 +313,26 @@ class GradientDescent:
                 for qubit in range(self._size):
                     for parameter in [0, 1]:
                         gate.basic_gates[qubit].params[parameter] += delta
-                        new_dist = self.distance
+                        if time_sensitive:
+                            new_dist = self.time_sensitive_distance
+                        else:
+                            new_dist = self.distance
                         gate.basic_gates[qubit].params[parameter] -= delta
                         correction[qubit][parameter] = (current_dist - new_dist) / delta * self.stepSize
-                        correction[qubit][parameter] *= (1 + random.uniform(-self.noise, self.noise))
+                        correction[qubit][parameter] *= (1 + random.uniform(-self.noise, self.noise))  # randomize
+                        # corrections
                 gate.set_correction(correction)
 
         for gate in self.gates:
             gate.correct_params()
         self.phase -= np.angle((self.matrix @ self.target_d).trace())
 
-    def descend(self, steps=1000, track_distance=False):  # perform gradient descent
+    def descend(self, steps=1000, time_sensitive=False, track_distance=False):  # perform gradient descent
         distances = []  # distances to track
 
         for i in range(steps):
             distances += [self.distance]
-            self.gradient_step()
+            self.gradient_step(time_sensitive=time_sensitive)
 
         # most parameters are cyclic - make them in (0, max)
         for gate in self.gates:
