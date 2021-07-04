@@ -4,6 +4,8 @@ from math import pi
 import random
 from qiskit import QuantumCircuit
 
+# Обновление после изменения со дна наверх
+
 
 class BasicGate:  # 1-qubit gate
     def __init__(self, params=None):
@@ -14,27 +16,26 @@ class BasicGate:  # 1-qubit gate
         self._id = np.eye(2, dtype=complex)
         self._x = np.asarray([[0, 1], [1, 0]], dtype=complex)
         self._y = np.asarray([[0, -1j], [1j, 0]], dtype=complex)
+        self.matrix = np.ones(2, dtype=np.complex)
+        self.derivative = [np.zeros((2, 2), dtype=np.complex) for _ in range(2)]
 
-    @property
-    def matrix(self):  # straightforward matrix representation
-        matrix = math.cos(self.params[0] / 2) * self._id - 1j * math.sin(self.params[0] / 2) * (
+    def update_matrix(self):  # straightforward matrix representation
+        self.matrix = math.cos(self.params[0] / 2) * self._id - 1j * math.sin(self.params[0] / 2) * (
                 math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
-        return matrix
 
-    @property
-    def derivative(self):
+    def update_derivative(self):
         d_theta = -1/2 * math.sin(self.params[0] / 2) * self._id - 1j / 2 * math.cos(self.params[0] / 2) * (math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
         d_phi = 1j * math.sin(self.params[0] / 2) * (math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
-        return [d_theta, d_phi]
+        self.derivative = [d_theta, d_phi]
+
+    def update(self):
+        self.update_matrix()
+        self.update_derivative()
 
     def randomize_params(self):
         self.params = [2 * math.pi * random.random(), 2 * math.pi * random.random()]
 
-    def correct_params(self, correction):  # update parameters based on passed corrections
-        self.params[0] += correction[0]
-        self.params[1] += correction[1]
-
-    def normalize_angles(self):
+    def normalize_angles(self):  # no update needed
         self.params[0] = self.params[0].real % (4 * pi)
         self.params[1] = self.params[1].real % (2 * pi)
 
@@ -47,24 +48,12 @@ class Gate:
         self._x = np.asarray([[0, 1], [1, 0]], dtype=complex)
         self._y = np.asarray([[0, -1j], [1j, 0]], dtype=complex)
         self._z = np.asarray([[1, 0], [0, -1]], dtype=complex)
+        self.matrix = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
 
-    @property
-    def matrix(self):
-        raise NotImplementedError()
-
-    def calculate_derivative(self):
-        raise NotImplementedError()
-
-    def apply_derivative(self, coefficient):
+    def update(self):
         raise NotImplementedError()
 
     def randomize_params(self):
-        raise NotImplementedError()
-
-    def set_correction(self, correction):
-        raise NotImplementedError()
-
-    def correct_params(self):
         raise NotImplementedError()
 
     def to_qiskit(self):
@@ -85,7 +74,9 @@ class Delay(Gate):
         for i in range(self.size - 1):
             for j in range(i + 1, self.size):
                 self.j[i][j] = 1
-        self.correction = 0
+        self.hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
+        self.update_hamiltonian()
+
         self.derivative = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
 
     def sigma_z(self, i: int, j: int):
@@ -97,26 +88,29 @@ class Delay(Gate):
                 matrix = np.kron(matrix, self._id)
         return matrix
 
-    @property
-    def hamiltonian(self):
+    def update_hamiltonian(self):
         hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
         for i in range(self.size):
             for j in range(i + 1, self.size):
                 hamiltonian += math.pi / 2 * self.j[i][j] * self.sigma_z(i, j)
-        return hamiltonian
+        self.hamiltonian = hamiltonian
 
-    @property
-    def matrix(self):  # evolution matrix
+    def update_matrix(self):  # evolution matrix
         evolution = np.eye(2 ** self.size, dtype=complex)
         for i in range(self.size):
             for j in range(i + 1, self.size):
                 evolution = evolution @ (math.cos(math.pi / 2 * self.j[i][j] * self.time) * np.eye(2 ** self.size,
                                                                                                    dtype=complex) - 1j * math.sin(
                     math.pi / 2 * self.j[i][j] * self.time) * self.sigma_z(i, j))
-        return evolution
+        self.matrix = evolution
 
-    def calculate_derivative(self):
+    def update_derivative(self):
         self.derivative = -1j * self.hamiltonian @ self.matrix
+
+    def update(self):
+        self.update_hamiltonian()
+        self.update_matrix()
+        self.update_derivative()
 
     def set_j(self, new_j):
         for i in range(self.j.shape[0]):
@@ -125,12 +119,6 @@ class Delay(Gate):
 
     def randomize_params(self):
         self.time = random.uniform(0, 0.3 / 0.00148)
-
-    def set_correction(self, correction):
-        self.correction = correction
-
-    def correct_params(self):
-        self.time += self.correction
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -152,30 +140,34 @@ class Pulse(Gate):
             params = [[0, 0] for _ in range(self.size)]
         self.basic_gates = [BasicGate(param) for param in params]
         self.correction = [[0, 0] for _ in range(self.size)]
-        self.derivative = [np.zeros((2 ** self.size, 2 ** self.size), dtype=complex) for _ in range(self.size)]
+        self.derivative = [[np.zeros((2 ** self.size, 2 ** self.size), dtype=complex), np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)] for _ in range(self.size)]
 
-    @property
-    def matrix(self):
+    def update_matrix(self):
         matrix = np.ones(1, dtype=complex)
         for i in range(self.size):
             matrix = np.kron(self.basic_gates[i].matrix, matrix)
-        return matrix
+        self.matrix = matrix
 
-    def calculate_derivative(self):
+    def update_derivative(self):
+        for qubit in range(self.size):
+            for parameter in [0, 1]:
+                derivative = np.ones(1, dtype=complex)
+                for j in range(self.size):
+                    if j != qubit:
+                        derivative = np.kron(self.basic_gates[j].matrix, derivative)
+                    else:
+                        derivative = np.kron(self.basic_gates[j].derivative[parameter], derivative)
+                self.derivative[qubit][parameter] = derivative
 
+    def update(self):
+        for basic_gate in self.basic_gates:
+            basic_gate.update()
+        self.update_matrix()
+        self.update_derivative()
 
     def randomize_params(self):
         for basicGate in self.basic_gates:
             basicGate.randomize_params()
-
-    def set_correction(self, correction):
-        for i in range(self.size):
-            self.correction[i][0] = correction[i][0]
-            self.correction[i][1] = correction[i][1]
-
-    def correct_params(self):  # update parameters based on passed corrections
-        for i in range(self.size):
-            self.basic_gates[i].correct_params(self.correction[i])
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -202,16 +194,19 @@ class Inversion(Gate):
         if qubits is None:
             qubits = []
         self.qubits = qubits
+        self.derivative = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
 
-    @property
-    def matrix(self):
+    def update_matrix(self):
         matrix = np.ones(1, dtype=complex)
         for i in range(self.size):
             if i in self.qubits:
                 matrix = np.kron(self._x, matrix)
             else:
                 matrix = np.kron(self._id, matrix)
-        return matrix
+        self.matrix = matrix
+
+    def update(self):
+        self.update_matrix()
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -220,12 +215,6 @@ class Inversion(Gate):
         return circuit
 
     def randomize_params(self):
-        pass
-
-    def set_correction(self, correction):
-        pass
-
-    def correct_params(self):
         pass
 
     def normalize(self):
@@ -244,13 +233,15 @@ class GradientDescent:
         else:
             self._size = int(math.log2(self.target.size) / 2)  # number of qubits
             self.phase = 0  # global phase
-            self.gates = []  # simultaneous gates
+            self.gates = [] # simultaneous gates
             for _ in range(n):
                 self.gates += [Pulse(size=self._size)]
                 self.gates += [Delay(size=self._size)]
             self.gates += [Pulse(size=self._size)]
         self.stepSize = 0.01  # gradient-to-change ration
         self.noise = 0
+        self.matrix = np.ones((2 ** self._size, 2 ** self._size), dtype=complex)
+        self.approx_time = 300
 
     @property
     def time(self):  # total approximation time
@@ -263,18 +254,11 @@ class GradientDescent:
     def target_d(self):  # target dagger
         return self.target.conjugate().transpose()
 
-    @property
-    def matrix(self):  # approximation matrix
+    def update_matrix(self):  # approximation matrix
         matrix = np.eye(2 ** self._size, dtype=complex)
-
         for gate in self.gates:
             matrix = gate.matrix @ matrix
-
-        return matrix * math.e ** (1j * self.phase)
-
-    @property
-    def time_sensitive_distance(self):  # Frobenius norm with total time cost factor
-        return ((self.matrix - self.target) @ (self.matrix - self.target).conjugate().transpose()).trace() * math.e ** (self.time / 500)
+        self.matrix = matrix * math.e ** (1j * self.phase)
 
     @property
     def distance(self):  # Frobenius norm
@@ -286,53 +270,47 @@ class GradientDescent:
             if type(gate) is Delay:
                 return gate.j
 
+    def update(self):
+        for gate in self.gates:
+            gate.update()
+        self.update_matrix()
+
     def randomize_params(self):  # randomizes params for 1-qubit operations
         for gate in self.gates:
             gate.randomize_params()
 
-    def gradient_step(self, time_sensitive=False):
-        delta = 0.001
-        if time_sensitive:
-            current_dist = self.time_sensitive_distance
-            new_dist = self.time_sensitive_distance
-        else:
-            current_dist = self.distance
-            new_dist = self.distance
-
-        for gate in self.gates:
-            if type(gate) is Delay:
-                gate.time += delta
-                if time_sensitive:
-                    new_dist = self.time_sensitive_distance
+    def corrections_from_gradients(self, time_sensitive=False):
+        for i in range(len(self.gates)):
+            if type(self.gates[i]) is Delay:
+                matrix = np.eye(2 ** self._size, dtype=complex)
+                for j in range(len(self.gates)):
+                    if i != j:
+                        matrix = self.gates[j].matrix @ matrix
+                    else:
+                        matrix = self.gates[j].derivative @ matrix
+                if not time_sensitive:
+                    self.gates[i].time -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
                 else:
-                    new_dist = self.distance
-                gate.time -= delta
-                gate.set_correction((current_dist - new_dist) / delta * self.stepSize)
-            if type(gate) is Pulse:
-                correction = [[0, 0] for _ in range(gate.size)]
+                    self.gates[i].time -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace() + self.distance / self.approx_time) * math.e ** (self.time / self.approx_time)
+            if type(self.gates[i]) is Pulse:
                 for qubit in range(self._size):
                     for parameter in [0, 1]:
-                        gate.basic_gates[qubit].params[parameter] += delta
-                        if time_sensitive:
-                            new_dist = self.time_sensitive_distance
-                        else:
-                            new_dist = self.distance
-                        gate.basic_gates[qubit].params[parameter] -= delta
-                        correction[qubit][parameter] = (current_dist - new_dist) / delta * self.stepSize
-                        correction[qubit][parameter] *= (1 + random.uniform(-self.noise, self.noise))  # randomize
-                        # corrections
-                gate.set_correction(correction)
+                        matrix = np.eye(2 ** self._size, dtype=complex)
+                        for j in range(len(self.gates)):
+                            if i != j:
+                                matrix = self.gates[j].matrix @ matrix
+                            else:
+                                matrix = self.gates[j].derivative[qubit][parameter] @ matrix
+                        self.gates[i].basic_gates[qubit].params[parameter] -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
 
-        for gate in self.gates:
-            gate.correct_params()
-        self.phase -= np.angle((self.matrix @ self.target_d).trace())
-
-    def descend(self, steps=1000, time_sensitive=False, track_distance=False):  # perform gradient descent
+    def descend(self, steps=1000, track_distance=False, time_sensitive=False):
         distances = []  # distances to track
 
         for i in range(steps):
             distances += [self.distance]
-            self.gradient_step(time_sensitive=time_sensitive)
+            self.corrections_from_gradients(time_sensitive=time_sensitive)
+            self.update()
+            self.phase -= np.angle((self.matrix @ self.target_d).trace())
 
         # most parameters are cyclic - make them in (0, max)
         for gate in self.gates:
@@ -432,7 +410,7 @@ class GradientDescent:
 
     def print_times(self):
         for gate in self.gates:
-            print(gate.time, end=" ")
+            print(gate.time.real, end=" ")
         print("\n")
 
     def to_device_text(self, filename=None):
