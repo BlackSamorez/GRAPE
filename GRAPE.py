@@ -4,6 +4,7 @@ from math import pi
 import random
 from qiskit import QuantumCircuit
 
+
 # Обновление после изменения со дна наверх
 
 
@@ -24,8 +25,10 @@ class BasicGate:  # 1-qubit gate
                 math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
 
     def update_derivative(self):
-        d_theta = -1/2 * math.sin(self.params[0] / 2) * self._id - 1j / 2 * math.cos(self.params[0] / 2) * (math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
-        d_phi = 1j * math.sin(self.params[0] / 2) * (math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
+        d_theta = -1 / 2 * math.sin(self.params[0] / 2) * self._id - 1j / 2 * math.cos(self.params[0] / 2) * (
+                    math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
+        d_phi = 1j * math.sin(self.params[0] / 2) * (
+                    math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
         self.derivative = [d_theta, d_phi]
 
     def update(self):
@@ -140,7 +143,8 @@ class Pulse(Gate):
             params = [[0, 0] for _ in range(self.size)]
         self.basic_gates = [BasicGate(param) for param in params]
         self.correction = [[0, 0] for _ in range(self.size)]
-        self.derivative = [[np.zeros((2 ** self.size, 2 ** self.size), dtype=complex), np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)] for _ in range(self.size)]
+        self.derivative = [[np.zeros((2 ** self.size, 2 ** self.size), dtype=complex),
+                            np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)] for _ in range(self.size)]
 
     def update_matrix(self):
         matrix = np.ones(1, dtype=complex)
@@ -233,7 +237,7 @@ class GradientDescent:
         else:
             self._size = int(math.log2(self.target.size) / 2)  # number of qubits
             self.phase = 0  # global phase
-            self.gates = [] # simultaneous gates
+            self.gates = []  # simultaneous gates
             for _ in range(n):
                 self.gates += [Pulse(size=self._size)]
                 self.gates += [Delay(size=self._size)]
@@ -278,7 +282,7 @@ class GradientDescent:
     def randomize_params(self):  # randomizes params for 1-qubit operations
         for gate in self.gates:
             if type(gate) is Delay:
-                gate.randomize_params(2/len(self.gates))
+                gate.randomize_params(2 / len(self.gates))
             else:
                 gate.randomize_params()
 
@@ -292,9 +296,14 @@ class GradientDescent:
                     else:
                         matrix = self.gates[j].derivative @ matrix
                 if not time_sensitive:
-                    self.gates[i].time -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
+                    self.gates[i].time -= self.stepSize * (
+                                ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
+                                    matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
                 else:
-                    self.gates[i].time -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace() + self.distance / self.approx_time) * math.e ** (self.time / self.approx_time)
+                    self.gates[i].time -= self.stepSize * (
+                                ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (
+                                    self.matrix - self.target).conjugate().transpose()).trace() + self.distance / self.approx_time) * math.e ** (
+                                                      self.time / self.approx_time)
             if type(self.gates[i]) is Pulse:
                 for qubit in range(self._size):
                     for parameter in [0, 1]:
@@ -304,7 +313,9 @@ class GradientDescent:
                                 matrix = self.gates[j].matrix @ matrix
                             else:
                                 matrix = self.gates[j].derivative[qubit][parameter] @ matrix
-                        self.gates[i].basic_gates[qubit].params[parameter] -= self.stepSize * (((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
+                        self.gates[i].basic_gates[qubit].params[parameter] -= self.stepSize * (
+                                    ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
+                                        matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
 
     def descend(self, steps=1000, track_distance=False, time_sensitive=False):
         distances = []  # distances to track
@@ -452,3 +463,15 @@ class GradientDescent:
             return
         else:
             return str
+
+
+def time(filename: str):
+    total_time = 0
+    file = open(filename, "r")
+    lines = file.readlines()
+    for i in range(1, len(lines)):
+        data = lines[i].split()
+        if data[0] == "delay" or data[0] == "Evolution":
+            total_time += float(data[1])
+    file.close()
+    return total_time
