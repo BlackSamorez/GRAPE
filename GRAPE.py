@@ -246,6 +246,7 @@ class GradientDescent:
         self.noise = 0
         self.matrix = np.ones((2 ** self._size, 2 ** self._size), dtype=complex)
         self.approx_time = 300
+        self.update()
 
     @property
     def time(self):  # total approximation time
