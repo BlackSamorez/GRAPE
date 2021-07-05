@@ -117,8 +117,8 @@ class Delay(Gate):
             for j in range(self.j.shape[1]):
                 self.j[i][j] = new_j[i][j]
 
-    def randomize_params(self):
-        self.time = random.uniform(0, 0.3 / 0.00148)
+    def randomize_params(self, exp=0.3):
+        self.time = random.uniform(0, exp / 0.00148)
 
     def to_qiskit(self):
         circuit = QuantumCircuit(self.size)
@@ -277,7 +277,10 @@ class GradientDescent:
 
     def randomize_params(self):  # randomizes params for 1-qubit operations
         for gate in self.gates:
-            gate.randomize_params()
+            if type(gate) is Delay:
+                gate.randomize_params(2/len(self.gates))
+            else:
+                gate.randomize_params()
 
     def corrections_from_gradients(self, time_sensitive=False):
         for i in range(len(self.gates)):
