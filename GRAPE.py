@@ -429,14 +429,14 @@ class GradientDescent:
         print("\n")
 
     def to_device_text(self, filename=None):
-        if self._size != 2:
+        if self._size not in [2, 3]:
             raise NotImplementedError()
         str = f"{self._size} {self.phase}\n"
         any_evolution = None
         for gate in self.gates:
             if type(gate) is Delay:
                 any_evolution = gate
-                str += f"Evolution {gate.time.real * gate.J[0][1].real} \n"
+                str += f"Evolution {gate.time.real * gate.j[0][1].real} \n"
             if type(gate) is Pulse:
                 str += "Kick "
                 for basic_gate in gate.basic_gates:
@@ -454,7 +454,7 @@ class GradientDescent:
         str += "J "
         for i in range(self._size):
             for j in range(self._size):
-                str += f"{any_evolution.J[i][j].real} "
+                str += f"{any_evolution.j[i][j].real} "
         str += "\n"
 
         if filename is not None:
