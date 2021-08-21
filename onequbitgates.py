@@ -30,6 +30,10 @@ class OneQubitGate(ABC):
     def normalize(self):
         pass
 
+    @abstractmethod
+    def __repr__(self):
+        pass
+
 
 class GeneralOneQubitGate(OneQubitGate):
     """Representation of a general one qubit gate"""
@@ -75,6 +79,9 @@ class GeneralOneQubitGate(OneQubitGate):
         self.params[1] = self.params[1] % (2 * np.pi)
         self.params[2] = self.params[2] % (2 * np.pi)
 
+    def __repr__(self):
+        return f"{self.__class__} {self.params}"
+
 
 class NMROneQubitGate(OneQubitGate):
     """One qubit gate limited to rotations in XY plane"""
@@ -107,3 +114,6 @@ class NMROneQubitGate(OneQubitGate):
     def normalize(self):  # no update needed
         self.params[0] = self.params[0].real % (4 * np.pi)
         self.params[1] = self.params[1].real % (2 * np.pi)
+
+    def __repr__(self):
+        return f"{self.__class__} {self.params}"

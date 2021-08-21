@@ -30,6 +30,10 @@ class MultiQubitGate(ABC):
     def normalize(self):
         pass
 
+    @abstractmethod
+    def __repr__(self):
+        pass
+
 
 class Delay(MultiQubitGate):
     """Evolution under fixed NMR Hamiltonian"""
@@ -98,6 +102,9 @@ class Delay(MultiQubitGate):
     def normalize(self):
         pass
 
+    def __repr__(self):
+        return f"{self.__class__} {self.time} {self.j}"
+
 
 class Pulse(MultiQubitGate):
     """Concurrent one qubit gates on each qubit"""
@@ -149,6 +156,13 @@ class Pulse(MultiQubitGate):
         for basic_gate in self.basic_gates:
             basic_gate.normalize()
 
+    def __repr__(self):
+        string= self.__class__
+        for i in range(self.size):
+            string += " "
+            string += self.basic_gates[i].__repr__()
+        return string
+
 
 class Inversion(MultiQubitGate):
     def __init__(self, size: int, qubits=None):
@@ -185,6 +199,11 @@ class Inversion(MultiQubitGate):
 
     def normalize(self):
         pass
+
+    def __repr__(self):
+        string = self.__class__
+        string += str(self.qubits)
+        return string
 
 
 class CXCascade(MultiQubitGate):
@@ -236,3 +255,6 @@ class CXCascade(MultiQubitGate):
 
     def normalize(self):
         pass
+
+    def __repr__(self):
+        return self.__class__
