@@ -80,7 +80,7 @@ class GeneralOneQubitGate(OneQubitGate):
         self.params[2] = self.params[2] % (2 * np.pi)
 
     def __repr__(self):
-        return f"{self.__class__} {self.params}"
+        return f"{self.__class__.__name__} {self.params}"
 
 
 class NMROneQubitGate(OneQubitGate):
@@ -116,4 +116,4 @@ class NMROneQubitGate(OneQubitGate):
         self.params[1] = self.params[1].real % (2 * np.pi)
 
     def __repr__(self):
-        return f"{self.__class__} {self.params}"
+        return f"{self.__class__.__name__} {self.params}"

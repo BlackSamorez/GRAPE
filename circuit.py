@@ -7,8 +7,24 @@ from multiqubitgates import MultiQubitGate, Delay, Pulse, Inversion, CXCascade
 
 class Circuit:
     """Class for representing quantum circuits as a series of quantum gates"""
-    def __init__(self):
+    def __init__(self, size: int):
+        self.size = size
         self.gates: list[MultiQubitGate] = []
+        self.matrix = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
+
+    def update(self):
+        """Update matrices and derivatives of all gates"""
+        for gate in self.gates:
+            gate.update()
+        matrix = np.eye(2 ** self.size, dtype=complex)
+        for gate in self.gates:
+            matrix = gate.matrix @ matrix
+        self.matrix = maatrix
+
+    def randomize_params(self):
+        """Randomize circuit params"""
+        for gate in self.gates:
+            gate.randomize_params()
 
     def __len__(self):
         return len(self.gates)
@@ -48,17 +64,24 @@ class Circuit:
             string += " "
         return string[:-1]
 
+    @property
+    def time(self):
+        time = 0
+        for gate in self.gates:
+            time += gate.time
+        return time
+
 
 class OneQubitEntanglementAlternation(Circuit):
     """Quantum circuit consisting of alternating single qubit rotations cascades and entanglement gates"""
-    def __init__(self, entanglement_gate_type: type(MultiQubitGate), number_of_entanglements: int):
-        super().__init__()
+    def __init__(self, size: int, entanglement_gate_type: type(MultiQubitGate), number_of_entanglements: int):
+        super().__init__(size)
         assert issubclass(entanglement_gate_type, MultiQubitGate), "entanglement_gate_type must be a subclass of " \
                                                                    "MultiQubitGate "
         if entanglement_gate_type is Pulse:
             raise Warning("Current architecture provides no qubit entanglement!")
 
-        self.gates.append(Pulse)
+        self.gates.append(Pulse(size))
         for i in range(number_of_entanglements):
-            self.gates.append(entanglement_gate_type)
-            self.gates.append(Pulse)
+            self.gates.append(entanglement_gate_type(size))
+            self.gates.append(Pulse(size))

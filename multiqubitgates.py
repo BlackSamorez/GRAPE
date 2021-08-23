@@ -103,7 +103,7 @@ class Delay(MultiQubitGate):
         pass
 
     def __repr__(self):
-        return f"{self.__class__} {self.time} {self.j}"
+        return f"{self.__class__.__name__} {self.time} {self.j}"
 
 
 class Pulse(MultiQubitGate):
@@ -157,7 +157,7 @@ class Pulse(MultiQubitGate):
             basic_gate.normalize()
 
     def __repr__(self):
-        string= self.__class__
+        string= self.__class__.__name__
         for i in range(self.size):
             string += " "
             string += self.basic_gates[i].__repr__()
@@ -201,7 +201,7 @@ class Inversion(MultiQubitGate):
         pass
 
     def __repr__(self):
-        string = self.__class__
+        string = self.__class__.__name__
         string += str(self.qubits)
         return string
 
@@ -257,4 +257,4 @@ class CXCascade(MultiQubitGate):
         pass
 
     def __repr__(self):
-        return self.__class__
+        return self.__class__.__name__
