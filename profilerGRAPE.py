@@ -1,5 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from GRAPE import *
+from GRAPE import GradientOptimization
+from circuit import OneQubitEntanglementAlternation
+from multiqubitgates import Delay, CXCascade
 
 J = np.zeros((3, 3))
 J[0][1] = 0.1385
@@ -12,7 +15,8 @@ TOFFOLI[7][7] = 0
 TOFFOLI[6][7] = 1
 TOFFOLI[7][6] = 1
 
-desc = GradientOptimization(TOFFOLI)
-desc.set_j(J)
+circ = OneQubitEntanglementAlternation(3, CXCascade, 6)
+
+desc = GradientOptimization(TOFFOLI, circ)
 desc.randomize_params()
-desc.descend(time_sensitive=True)
+desc.descend()

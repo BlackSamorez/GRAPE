@@ -2,7 +2,6 @@ import numpy as np
 import random
 from qiskit import QuantumCircuit
 from abc import ABC, abstractmethod
-
 from onequbitgates import OneQubitGate, GeneralOneQubitGate, NMROneQubitGate
 
 
@@ -12,7 +11,15 @@ class MultiQubitGate(ABC):
     def __init__(self, size: int, time: float = 0):
         self.time: float = time
         self.size: int = size  # number of qubits
-        self.matrix: np.ndarray = np.ones((2 ** self.size, 2 ** self.size), dtype=complex)
+        self.matrix: np.ndarray = np.eye(2 ** self.size, dtype=complex)
+        self.params_getter = None
+        self.derivative = np.zeros((0, 2 ** self.size, 2 ** self.size), dtype=complex)
+
+    @property
+    def params(self):
+        if self.params_getter is None:
+            raise NotImplementedError("Params getter should be implemented and set")
+        return self.params_getter
 
     @abstractmethod
     def update(self):
@@ -49,9 +56,29 @@ class Delay(MultiQubitGate):
             for j in range(i + 1, self.size):
                 self.j[i][j] = 1
         self.hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
-        self.update_hamiltonian()
 
-        self.derivative = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
+        self.derivative = np.zeros((1, 2 ** self.size, 2 ** self.size), dtype=complex)
+
+        class ParamsGetter:
+            def __init__(self, master):
+                self.master = master
+
+            def __getitem__(self, key: int):
+                if key != 0:
+                    raise KeyError
+                return self.master.time
+
+            def __setitem__(self, key: int, value: float):
+                if key != 0:
+                    raise KeyError
+                self.master.time = value
+
+            def __len__(self):
+                return 1
+
+        self.params_getter = ParamsGetter(self)
+
+        self.update()
 
     def sigma_z(self, i: int, j: int):
         matrix = np.ones((1, 1), dtype=complex)
@@ -79,7 +106,7 @@ class Delay(MultiQubitGate):
         self.matrix = evolution
 
     def update_derivative(self):
-        self.derivative = -1j * self.hamiltonian @ self.matrix
+        self.derivative[0] = -1j * self.hamiltonian @ self.matrix
 
     def update(self):
         self.update_hamiltonian()
@@ -109,14 +136,38 @@ class Delay(MultiQubitGate):
 class Pulse(MultiQubitGate):
     """Concurrent one qubit gates on each qubit"""
 
-    def __init__(self, size: int, params=None):
+    def __init__(self, size: int, one_qubit_gate_type: type(OneQubitGate) = None, params=None):
         super().__init__(size=size, time=0)
 
+        if one_qubit_gate_type is None:
+            one_qubit_gate_type = GeneralOneQubitGate
+
+        assert issubclass(one_qubit_gate_type, OneQubitGate), "one_qubit_gate_type must be OneQubitGate"
+
         if params is None:
-            params = [[0, 0] for _ in range(self.size)]
-        self.basic_gates = [NMROneQubitGate(param) for param in params]
-        self.correction = [[0, 0] for _ in range(self.size)]
-        self.derivative = np.zeros((self.size, 2, 2 ** self.size, 2 ** self.size), dtype=complex)
+            params = [None] * self.size
+        self.basic_gates = [one_qubit_gate_type(param) for param in params]
+        self.derivative = np.zeros((self.size * self.basic_gates[0].number_of_parameters, 2 ** self.size, 2 ** self.size), dtype=complex)
+
+        class ParamsGetter:
+            def __init__(self, master):
+                self.master = master
+
+            def __getitem__(self, key):
+                # TODO: write exceptions for bad keys
+                return self.master.basic_gates[key // self.master.basic_gates[0].number_of_parameters].params[
+                    key % self.master.basic_gates[0].number_of_parameters]
+
+            def __setitem__(self, key, value: float):
+                # TODO: write exceptions for bad keys
+                self.master.basic_gates[key // self.master.basic_gates[0].number_of_parameters].params[
+                    key % self.master.basic_gates[0].number_of_parameters] = value
+
+            def __len__(self):
+                return len(self.master.basic_gates) * len(self.master.basic_gates[0].params)
+
+        self.params_getter = ParamsGetter(self)
+        self.update()
 
     def update_matrix(self):
         matrix = np.ones(1, dtype=complex)
@@ -126,7 +177,7 @@ class Pulse(MultiQubitGate):
 
     def update_derivative(self):
         for qubit in range(self.size):
-            for parameter in [0, 1]:
+            for parameter in range(self.basic_gates[0].number_of_parameters):
                 qubit_parameter_derivative = np.ones(1, dtype=complex)
                 for j in range(self.size):
                     if j != qubit:
@@ -134,7 +185,7 @@ class Pulse(MultiQubitGate):
                     else:
                         qubit_parameter_derivative = np.kron(self.basic_gates[j].derivative[parameter],
                                                              qubit_parameter_derivative)
-                self.derivative[qubit][parameter] = qubit_parameter_derivative
+                self.derivative[qubit * self.basic_gates[0].number_of_parameters + parameter] = qubit_parameter_derivative
 
     def update(self):
         for basic_gate in self.basic_gates:
@@ -174,7 +225,22 @@ class Inversion(MultiQubitGate):
         if qubits is None:
             qubits = []
         self.qubits = qubits
-        self.derivative = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
+
+        class ParamsGetter:
+            def __init__(self, master):
+                self.master = master
+
+            def __getitem__(self, key):
+                raise KeyError(f"{self.master.__class__.__name__} has no parameters")
+
+            def __setitem__(self, key, value: float):
+                raise KeyError(f"{self.master.__class__.__name__} has no parameters")
+
+            def __len__(self):
+                return 0
+
+        self.params_getter = ParamsGetter(self)
+        self.update()
 
     def update_matrix(self):
         matrix = np.ones(1, dtype=complex)
@@ -216,6 +282,21 @@ class CXCascade(MultiQubitGate):
                                [0, 0, 0, 1],
                                [0, 0, 1, 0]], dtype=complex)
         self.construct_matrix()
+
+        class ParamsGetter:
+            def __init__(self, master):
+                self.master = master
+
+            def __getitem__(self, key):
+                raise KeyError(f"{self.master.__class__.__name__} has no parameters")
+
+            def __setitem__(self, key, value: float):
+                raise KeyError(f"{self.master.__class__.__name__} has no parameters")
+
+            def __len__(self):
+                return 0
+
+        self.params_getter = ParamsGetter(self)
 
     def apply_cx(self, i: int, j: int):
         a = np.array([[1]])

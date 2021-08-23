@@ -1,7 +1,6 @@
 import numpy as np
 from qiskit import QuantumCircuit
 from abc import ABC, abstractmethod
-
 from multiqubitgates import MultiQubitGate, Delay, Pulse, Inversion, CXCascade
 
 
@@ -19,7 +18,7 @@ class Circuit:
         matrix = np.eye(2 ** self.size, dtype=complex)
         for gate in self.gates:
             matrix = gate.matrix @ matrix
-        self.matrix = maatrix
+        self.matrix = matrix
 
     def randomize_params(self):
         """Randomize circuit params"""
@@ -34,20 +33,23 @@ class Circuit:
             for i in range(len(other)):
                 self.gates.append(other.gates[i])
             return self
-        if type(other) is MultiQubitGate:
+        if issubclass(type(other), MultiQubitGate):
             self.gates.append(other)
             return self
         raise TypeError("Other must be Architecture or MultiQubitGate")
 
     def __add__(self, other):
-        result = Circuit()
+        result = Circuit(self.size)
         for i in range(len(self)):
             result.gates.append(self.gates[i])
         if type(other) is type(self):
+            assert other.size == self.size, "other must be of same size as self"
             for i in range(len(other.gates)):
                 result += other.gates[i]
             return result
-        if issubclass(other, MultiQubitGate):
+        if issubclass(other.__class__, MultiQubitGate):
+            if other.size != self.size:
+                raise NotImplementedError
             result += other
             return result
         raise TypeError("Other must be Architecture or MultiQubitGate")
@@ -70,6 +72,26 @@ class Circuit:
         for gate in self.gates:
             time += gate.time
         return time
+
+    def derivative(self, derivative_gate, parameter: int):
+        if type(derivative_gate) is int:
+            derivative_gate = self.gates[derivative_gate]
+
+        if not issubclass(type(derivative_gate), MultiQubitGate):
+            raise TypeError(f"gate argument must be of int or MuliQubitGate type. {derivative_gate.__class__.__name__} was given")
+
+        derivative = np.eye(2 ** self.size, dtype=complex)
+        for gate in self.gates:
+            if gate is derivative_gate:
+                derivative = gate.derivative[parameter] @ derivative
+            else:
+                derivative = gate.matrix @ derivative
+
+        return derivative
+
+    def normalize(self):
+        for gate in self.gates:
+            gate.normalize()
 
 
 class OneQubitEntanglementAlternation(Circuit):
