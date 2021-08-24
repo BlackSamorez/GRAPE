@@ -1,6 +1,7 @@
 from unittest import TestCase
 import numpy as np
 
+from onequbitgates import GeneralOneQubitGate
 from multiqubitgates import Delay, Pulse, Inversion, CXCascade
 
 
@@ -17,11 +18,11 @@ class TestPulse(TestCase):
         pulse = Pulse(2)
         self.assertEqual(pulse.time, 0)
         self.assertEqual(pulse.size, 2)
-        self.assertEqual(pulse.derivative.shape, (2 * 3, 4, 4))
+        self.assertEqual(pulse.derivative.shape, (2 * pulse.basic_gates[0].number_of_parameters, 4, 4))
         self.assertEqual(len(pulse.basic_gates), 2)
 
     def test_update_matrix(self):
-        pulse = Pulse(2)
+        pulse = Pulse(2, one_qubit_gate_type=GeneralOneQubitGate)
         np.testing.assert_allclose(pulse.matrix, np.eye(4, dtype=complex), rtol=0.001, atol=0.001)
         pulse.basic_gates[0].params[0] = np.pi
         pulse.basic_gates[0].update()

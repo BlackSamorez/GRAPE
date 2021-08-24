@@ -89,13 +89,23 @@ class TestNMROneQubitGate(TestCase):
 
         gate.params = np.asarray([np.pi, 0], dtype=float)
         gate.update_derivative()
+        np.testing.assert_allclose(np.asarray([[-1/2, 0],
+                                               [0, -1/2]], dtype=complex), gate.derivative[0], rtol=0.001, atol=0.001)
+
+        gate.params = np.asarray([0, 0], dtype=float)
+        gate.update_derivative()
+        np.testing.assert_allclose(np.asarray([[0, -0.5j],
+                                               [-0.5j, 0]], dtype=complex), gate.derivative[0], rtol=0.001, atol=0.001)
+
+        gate.params = np.asarray([np.pi, 0], dtype=float)
+        gate.update_derivative()
         np.testing.assert_allclose(np.asarray([[0, 1],
-                                               [-1, 0]], dtype=complex), gate.derivative[0], rtol=0.001, atol=0.001)
+                                               [-1, 0]], dtype=complex), gate.derivative[1], rtol=0.001, atol=0.001)
 
         gate.params = np.asarray([0, 0], dtype=float)
         gate.update_derivative()
         np.testing.assert_allclose(np.asarray([[0, 0],
-                                               [0, 0]], dtype=complex), gate.derivative[0], rtol=0.001, atol=0.001)
+                                               [0, 0]], dtype=complex), gate.derivative[1], rtol=0.001, atol=0.001)
 
     def test_randomize_params(self):
         gate = NMROneQubitGate()

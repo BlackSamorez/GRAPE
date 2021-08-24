@@ -2,6 +2,7 @@ import numpy as np
 from qiskit import QuantumCircuit
 from abc import ABC, abstractmethod
 from multiqubitgates import MultiQubitGate, Delay, Pulse, Inversion, CXCascade
+from onequbitgates import NMROneQubitGate
 
 
 class Circuit:
@@ -106,4 +107,4 @@ class OneQubitEntanglementAlternation(Circuit):
         self.gates.append(Pulse(size))
         for i in range(number_of_entanglements):
             self.gates.append(entanglement_gate_type(size))
-            self.gates.append(Pulse(size))
+            self.gates.append(Pulse(size, one_qubit_gate_type=NMROneQubitGate))

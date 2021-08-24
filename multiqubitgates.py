@@ -136,18 +136,30 @@ class Delay(MultiQubitGate):
 class Pulse(MultiQubitGate):
     """Concurrent one qubit gates on each qubit"""
 
-    def __init__(self, size: int, one_qubit_gate_type: type(OneQubitGate) = None, params=None):
+    def __init__(self, size: int, one_qubit_gate_type=None):
         super().__init__(size=size, time=0)
+        if type(one_qubit_gate_type) is str:
+            # TODO: implement match-case when available
+            one_qubit_gate_type = one_qubit_gate_type.lower()
+            general_aliases = ["general", str(GeneralOneQubitGate.__class__.__name__).lower()]
+            nmr_aliases = ["nmr", str(NMROneQubitGate.__class__.__name__).lower()]
+
+            if one_qubit_gate_type in general_aliases:
+                one_qubit_gate_type = GeneralOneQubitGate
+            elif one_qubit_gate_type in nmr_aliases:
+                one_qubit_gate_type = NMROneQubitGate
+            else:
+                raise ValueError(
+                    f"one_qubit_gate_type must be OneQubit gate type or string in {general_aliases + nmr_aliases}")
 
         if one_qubit_gate_type is None:
             one_qubit_gate_type = GeneralOneQubitGate
 
         assert issubclass(one_qubit_gate_type, OneQubitGate), "one_qubit_gate_type must be OneQubitGate"
 
-        if params is None:
-            params = [None] * self.size
-        self.basic_gates = [one_qubit_gate_type(param) for param in params]
-        self.derivative = np.zeros((self.size * self.basic_gates[0].number_of_parameters, 2 ** self.size, 2 ** self.size), dtype=complex)
+        self.basic_gates = [one_qubit_gate_type() for _ in range(self.size)]
+        self.derivative = np.zeros(
+            (self.size * self.basic_gates[0].number_of_parameters, 2 ** self.size, 2 ** self.size), dtype=complex)
 
         class ParamsGetter:
             def __init__(self, master):
@@ -185,7 +197,8 @@ class Pulse(MultiQubitGate):
                     else:
                         qubit_parameter_derivative = np.kron(self.basic_gates[j].derivative[parameter],
                                                              qubit_parameter_derivative)
-                self.derivative[qubit * self.basic_gates[0].number_of_parameters + parameter] = qubit_parameter_derivative
+                self.derivative[
+                    qubit * self.basic_gates[0].number_of_parameters + parameter] = qubit_parameter_derivative
 
     def update(self):
         for basic_gate in self.basic_gates:
@@ -208,7 +221,7 @@ class Pulse(MultiQubitGate):
             basic_gate.normalize()
 
     def __repr__(self):
-        string= self.__class__.__name__
+        string = self.__class__.__name__
         for i in range(self.size):
             string += " "
             string += self.basic_gates[i].__repr__()

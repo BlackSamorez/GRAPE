@@ -12,9 +12,7 @@ from circuit import Circuit, OneQubitEntanglementAlternation
 class GradientOptimization:
     def __init__(self, target, circuit: Circuit = None, filename: str = None):
         self.target = target  # unitary to approximate
-        self.stepSize = 0.01  # gradient-to-change ration
-        self.noise = 0
-        self.time_weight_constant = 300
+        self.stepSize = 0.1  # gradient-to-change ration
 
         if filename is not None:
             raise NotImplementedError
@@ -29,6 +27,10 @@ class GradientOptimization:
             else:
                 self.circuit = circuit
         self.update()
+
+    @property
+    def matrix(self):
+        return self.circuit.matrix * np.e ** (1j * self.phase)
 
     @property
     def time(self) -> float:
@@ -47,8 +49,8 @@ class GradientOptimization:
     @property
     def metric_distance(self):
         """Frobenius norm between matrix and target"""
-        return ((self.circuit.matrix * np.e ** (1j * self.phase) - self.target) @ (
-                self.circuit.matrix * np.e ** (1j * self.phase) - self.target).conjugate().T).trace().real
+        return ((self.matrix - self.target) @ (
+                self.matrix - self.target).conjugate().T).trace().real
 
     def metric_derivative(self, derivative):
         """
@@ -57,9 +59,9 @@ class GradientOptimization:
         :param derivative: derivative of matrix
         :return: derivative of norm
         """
-        return (((self.circuit.matrix * np.e ** (1j * self.phase) - self.target) @ derivative.conjugate().T).trace() + (
+        return (((self.matrix - self.target) @ derivative.conjugate().T).trace() + (
                 derivative @ (
-                    self.circuit.matrix * np.e ** (1j * self.phase) - self.target).conjugate().T).trace()).real
+                    self.matrix - self.target).conjugate().T).trace()).real
 
     def update(self):
         """Update the circuit"""
@@ -75,14 +77,14 @@ class GradientOptimization:
                 metric_derivative = self.metric_derivative(self.circuit.derivative(i, parameter))
                 self.circuit.gates[i].params[parameter] -= self.stepSize * metric_derivative
 
-    def descend(self, steps=1000, track_distance=False, time_sensitive=False):
+    def descend(self, steps=1000, track_distance=False):
         distances = []  # distances to track
 
         for i in range(steps):
             distances.append(self.metric_distance)
             self.corrections_from_gradients()
             self.update()
-            self.phase -= np.angle((self.circuit.matrix @ self.target_d).trace())
+            self.phase -= np.angle((self.target_d @ self.matrix).trace())
 
         # most parameters are cyclic - make them in (0, max)
         self.circuit.normalize()

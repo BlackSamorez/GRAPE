@@ -88,7 +88,7 @@ class GeneralOneQubitGate(OneQubitGate):
 class NMROneQubitGate(OneQubitGate):
     """One qubit gate limited to rotations in XY plane"""
     def __init__(self, params: np.ndarray = None):
-        super().__init__(2, params)  # params: theta. phi
+        super().__init__(2, params)  # params: theta, phi
 
     def update_matrix(self):  # straightforward matrix representation
         self.matrix = np.cos(self.params[0] / 2) * self._id - 1j * np.sin(self.params[0] / 2) * (
@@ -100,7 +100,7 @@ class NMROneQubitGate(OneQubitGate):
         d_phi = 1j * np.sin(self.params[0] / 2) * (
                 np.sin(self.params[1]) * self._x + np.cos(self.params[1]) * self._y)
         self.derivative[0] = d_theta
-        self.derivative[0] = d_phi
+        self.derivative[1] = d_phi
 
     def update(self):
         self.update_matrix()
