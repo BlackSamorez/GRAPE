@@ -1,16 +1,8 @@
 from unittest import TestCase
+
 import numpy as np
-
-from onequbitgates import GeneralOneQubitGate
-from multiqubitgates import Delay, Pulse, Inversion, CXCascade
-
-
-def test_params(gate, test_entry):
-    for i in range(len(gate.params)):
-        old = gate.params[i]
-        gate.params[i] = gate.params[i]
-        new = gate.params[i]
-        test_entry.assertEqual(old, new)
+from GRAPE.multiqubitgates import Delay, Pulse, Inversion, CXCascade
+from GRAPE.onequbitgates import GeneralOneQubitGate
 
 
 class TestPulse(TestCase):
@@ -61,7 +53,11 @@ class TestPulse(TestCase):
     def test_params(self):
         pulse = Pulse(2)
         self.assertEqual(len(pulse.params), pulse.basic_gates[0].number_of_parameters * pulse.size)
-        test_params(pulse, self)
+        for i in range(len(pulse.params)):
+            old = pulse.params[i]
+            pulse.params[i] = pulse.params[i]
+            new = pulse.params[i]
+            self.assertEqual(old, new)
 
 
 class TestInversion(TestCase):
@@ -93,10 +89,6 @@ class TestInversion(TestCase):
         circuit = pulse.to_circuit()
         assert circuit.size() == pulse.size
 
-    def test_params(self):
-        inversion = Inversion(2)
-        test_params(inversion, self)
-
 
 class TestCXCascade(TestCase):
     def test_creation(self):
@@ -110,12 +102,12 @@ class TestCXCascade(TestCase):
     def test_entanglement(self):
         pass
 
-    def test_params(self):
-        cx_cascade = Inversion(2)
-        test_params(cx_cascade, self)
-
 
 class TestDelay(TestCase):
     def test_params(self):
         delay = Delay(2)
-        test_params(delay, self)
+        for i in range(len(delay.params)):
+            old = delay.params[i]
+            delay.params[i] = delay.params[i]
+            new = delay.params[i]
+            self.assertEqual(old, new)

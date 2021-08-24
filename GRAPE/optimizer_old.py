@@ -1,7 +1,8 @@
-import numpy as np
 import math
-from math import pi
 import random
+from math import pi
+
+import numpy as np
 from qiskit import QuantumCircuit
 
 

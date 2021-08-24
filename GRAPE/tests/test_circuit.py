@@ -1,7 +1,8 @@
 from unittest import TestCase
+
 import numpy as np
-from circuit import Circuit
-from multiqubitgates import Pulse
+from GRAPE.circuit import Circuit
+from GRAPE.multiqubitgates import Pulse
 
 
 class TestCircuit(TestCase):

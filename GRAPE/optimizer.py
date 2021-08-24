@@ -1,12 +1,6 @@
 import numpy as np
-import math
-from math import pi
-import random
-from qiskit import QuantumCircuit
-from abc import ABC, abstractmethod
-
-from multiqubitgates import MultiQubitGate, Delay, Pulse, Inversion, CXCascade
-from circuit import Circuit, OneQubitEntanglementAlternation
+from .circuit import Circuit, OneQubitEntanglementAlternation
+from .multiqubitgates import CXCascade
 
 
 class GradientOptimization:
@@ -18,7 +12,7 @@ class GradientOptimization:
             raise NotImplementedError
             # self.read_text(filename)
         else:
-            self._size = int(math.log2(self.target.size) / 2)  # number of qubits
+            self._size = int(np.log2(self.target.size) / 2)  # number of qubits
             self.phase = 0  # global phase
 
             if circuit is None:
@@ -89,7 +83,7 @@ class GradientOptimization:
         # most parameters are cyclic - make them in (0, max)
         self.circuit.normalize()
 
-        self.phase = self.phase.real % (2 * math.pi)
+        self.phase = self.phase.real % (2 * np.pi)
 
         if track_distance:
             return distances

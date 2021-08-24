@@ -1,8 +1,9 @@
-import numpy as np
 import random
-from qiskit import QuantumCircuit
 from abc import ABC, abstractmethod
-from onequbitgates import OneQubitGate, GeneralOneQubitGate, NMROneQubitGate
+
+import numpy as np
+from .onequbitgates import OneQubitGate, GeneralOneQubitGate, NMROneQubitGate
+from qiskit import QuantumCircuit
 
 
 class MultiQubitGate(ABC):

@@ -1,9 +1,9 @@
 from unittest import TestCase
-import numpy as np
 
-from multiqubitgates import CXCascade, Pulse
-from circuit import Circuit
-from GRAPE import GradientOptimization
+import numpy as np
+from GRAPE.optimizer import GradientOptimization
+from GRAPE.circuit import Circuit
+from GRAPE.multiqubitgates import CXCascade, Pulse
 
 CX = np.asarray([[1, 0, 0, 0],
                  [0, 1, 0, 0],

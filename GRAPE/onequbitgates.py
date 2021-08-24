@@ -1,6 +1,7 @@
-import numpy as np
 import random
 from abc import ABC, abstractmethod
+
+import numpy as np
 
 
 class OneQubitGate(ABC):

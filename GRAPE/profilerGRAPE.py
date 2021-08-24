@@ -1,8 +1,7 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from multiqubitgates import Pulse, Delay, Inversion, CXCascade
-from circuit import Circuit
 from GRAPE import GradientOptimization
+from circuit import Circuit
+from multiqubitgates import Pulse, Delay
 
 cx = np.asarray([[1, 0, 0, 0],
                  [0, 1, 0, 0],
