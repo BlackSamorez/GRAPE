@@ -66,13 +66,6 @@ class TestPulse(TestCase):
                                        rtol=0.01)
             pulse.params[param] -= test_increment
 
-    def test_to_circuit(self):
-        pulse = Pulse(2)
-        pulse.randomize_params()
-        pulse.update()
-        circuit = pulse.to_circuit()
-        assert circuit.size() == pulse.size
-
     def test_unitarity(self):
         pulse = Pulse(2)
         pulse.randomize_params()
@@ -112,13 +105,6 @@ class TestInversion(TestCase):
                                                                  [1, 0, 0, 0],
                                                                  [0, 0, 0, 1],
                                                                  [0, 0, 1, 0]], dtype=complex), rtol=0.001, atol=0.001)
-
-    def test_to_circuit(self):
-        pulse = Pulse(2)
-        pulse.randomize_params()
-        pulse.update()
-        circuit = pulse.to_circuit()
-        assert circuit.size() == pulse.size
 
 
 class TestCXCascade(TestCase):
