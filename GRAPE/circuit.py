@@ -1,10 +1,11 @@
 import numpy as np
-from .multiqubitgates import MultiQubitGate, Pulse
-from .onequbitgates import NMROneQubitGate
+
+from .multiqubitgates import MultiQubitGate, Pulse, Evolution
 
 
 class Circuit:
     """Class for representing quantum circuits as a series of quantum gates"""
+
     def __init__(self, size: int):
         self.size = size
         self.gates: list[MultiQubitGate] = []
@@ -60,8 +61,8 @@ class Circuit:
         if len(self) == 0:
             return ""
         string = ""
-        for i in range(len(self) - 1):
-            string += self.gates[i].__name__
+        for i in range(len(self)):
+            string += self.gates[i].__class__.__name__
             string += " "
         return string[:-1]
 
@@ -77,7 +78,8 @@ class Circuit:
             derivative_gate = self.gates[derivative_gate]
 
         if not issubclass(type(derivative_gate), MultiQubitGate):
-            raise TypeError(f"gate argument must be of int or MuliQubitGate type. {derivative_gate.__class__.__name__} was given")
+            raise TypeError(
+                f"gate argument must be of int or MuliQubitGate type. {derivative_gate.__class__.__name__} was given")
 
         derivative = np.eye(2 ** self.size, dtype=complex)
         for gate in self.gates:
@@ -89,13 +91,29 @@ class Circuit:
         return derivative
 
     def normalize(self):
+        """
+        Normalize circuit parameters
+        """
         for gate in self.gates:
             gate.normalize()
+
+    def set_hamiltonian(self, hamiltonian: np.ndarray):
+        """
+        Change hamiltonian of hamiltonian evolution gates
+        
+        :type hamiltonian: ndarray
+        :param hamiltonian: hamiltonian to be set
+        """
+        for gate in self.gates:
+            if type(gate) is Evolution:
+                gate.set_j(hamiltonian)
 
 
 class OneQubitEntanglementAlternation(Circuit):
     """Quantum circuit consisting of alternating single qubit rotations cascades and entanglement gates"""
-    def __init__(self, size: int, entanglement_gate_type: type(MultiQubitGate), number_of_entanglements: int):
+
+    def __init__(self, size: int, entanglement_gate_type: type(MultiQubitGate), number_of_entanglements: int,
+                 one_qubit_gate_type=None):
         super().__init__(size)
         assert issubclass(entanglement_gate_type, MultiQubitGate), "entanglement_gate_type must be a subclass of " \
                                                                    "MultiQubitGate "
@@ -105,4 +123,4 @@ class OneQubitEntanglementAlternation(Circuit):
         self.gates.append(Pulse(size))
         for i in range(number_of_entanglements):
             self.gates.append(entanglement_gate_type(size))
-            self.gates.append(Pulse(size, one_qubit_gate_type=NMROneQubitGate))
+            self.gates.append(Pulse(size, one_qubit_gate_type=one_qubit_gate_type))

@@ -1,7 +1,8 @@
 import numpy as np
-from GRAPE import GradientOptimization
-from circuit import Circuit
-from multiqubitgates import Pulse, Delay
+
+from GRAPE.circuit import Circuit
+from GRAPE.multiqubitgates import Pulse, Evolution
+from GRAPE.optimizer import GradientOptimization
 
 cx = np.asarray([[1, 0, 0, 0],
                  [0, 1, 0, 0],
@@ -19,13 +20,12 @@ toffoli = np.asarray([[1, 0, 0, 0, 0, 0, 0, 0],
 
 circuit = Circuit(3)
 circuit += Pulse(3, "nmr")
-circuit += Delay(3)
+circuit += Evolution(3)
 circuit += Pulse(3, "nmr")
-circuit += Delay(3)
+circuit += Evolution(3)
 circuit += Pulse(3, "nmr")
-circuit += Delay(3)
+circuit += Evolution(3)
 circuit += Pulse(3, "nmr")
-
 
 desc = GradientOptimization(toffoli, circuit)
 desc.randomize_params()

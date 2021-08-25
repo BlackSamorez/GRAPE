@@ -24,9 +24,9 @@ class BasicGate:  # 1-qubit gate
 
     def update_derivative(self):
         d_theta = -1 / 2 * math.sin(self.params[0] / 2) * self._id - 1j / 2 * math.cos(self.params[0] / 2) * (
-                    math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
+                math.cos(self.params[1]) * self._x + math.sin(self.params[1]) * self._y)
         d_phi = 1j * math.sin(self.params[0] / 2) * (
-                    math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
+                math.sin(self.params[1]) * self._x + math.cos(self.params[1]) * self._y)
         self.derivative = [d_theta, d_phi]
 
     def update(self):
@@ -296,13 +296,13 @@ class GradientDescent:
                         matrix = self.gates[j].derivative @ matrix
                 if not time_sensitive:
                     self.gates[i].time -= self.stepSize * (
-                                ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
-                                    matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
+                            ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
+                            matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
                 else:
                     self.gates[i].time -= self.stepSize * (
-                                ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (
-                                    self.matrix - self.target).conjugate().transpose()).trace() + self.distance / self.approx_time) * math.e ** (
-                                                      self.time / self.approx_time)
+                            ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (matrix @ (
+                            self.matrix - self.target).conjugate().transpose()).trace() + self.distance / self.approx_time) * math.e ** (
+                                                  self.time / self.approx_time)
             if type(self.gates[i]) is Pulse:
                 for qubit in range(self._size):
                     for parameter in [0, 1]:
@@ -313,8 +313,8 @@ class GradientDescent:
                             else:
                                 matrix = self.gates[j].derivative[qubit][parameter] @ matrix
                         self.gates[i].basic_gates[qubit].params[parameter] -= self.stepSize * (
-                                    ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
-                                        matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
+                                ((self.matrix - self.target) @ matrix.conjugate().transpose()).trace() + (
+                                matrix @ (self.matrix - self.target).conjugate().transpose()).trace())
 
     def descend(self, steps=1000, track_distance=False, time_sensitive=False):
         distances = []  # distances to track
@@ -338,4 +338,3 @@ class GradientDescent:
         for gate in self.gates:
             print(gate.time.real, end=" ")
         print("\n")
-

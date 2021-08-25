@@ -20,7 +20,8 @@ class OneQubitGate(ABC):
         if params is None:
             params = np.zeros(self.number_of_parameters, dtype=float)
         self.params: np.ndarray = np.asarray(params, dtype=float)
-        assert self.params.shape == (self.number_of_parameters,), f"Mismatch in number_of_params and shape of params provided: {self.number_of_parameters} vs {self.params.shape[0]} "
+        assert self.params.shape == (
+            self.number_of_parameters,), f"Mismatch in number_of_params and shape of params provided: {self.number_of_parameters} vs {self.params.shape[0]} "
 
     @abstractmethod
     def update_matrix(self):
@@ -45,6 +46,7 @@ class OneQubitGate(ABC):
 
 class GeneralOneQubitGate(OneQubitGate):
     """Representation of a general one qubit gate"""
+
     def __init__(self, params=None):
         super().__init__(3, params=params)  # params: theta, phi, lambda
 
@@ -75,7 +77,8 @@ class GeneralOneQubitGate(OneQubitGate):
         self.update_derivative()
 
     def randomize_params(self):
-        self.params = np.asarray([2 * np.pi * random.random(), 2 * np.pi * random.random(), 2 * np.pi * random.random()], dtype=float)
+        self.params = np.asarray(
+            [2 * np.pi * random.random(), 2 * np.pi * random.random(), 2 * np.pi * random.random()], dtype=float)
 
     def normalize(self):
         self.params[0] = self.params[0] % (4 * np.pi)
@@ -88,6 +91,7 @@ class GeneralOneQubitGate(OneQubitGate):
 
 class NMROneQubitGate(OneQubitGate):
     """One qubit gate limited to rotations in XY plane"""
+
     def __init__(self, params: np.ndarray = None):
         super().__init__(2, params)  # params: theta, phi
 
@@ -99,7 +103,7 @@ class NMROneQubitGate(OneQubitGate):
         d_theta = -1 / 2 * np.sin(self.params[0] / 2) * self._id - 1j / 2 * np.cos(self.params[0] / 2) * (
                 np.cos(self.params[1]) * self._x + np.sin(self.params[1]) * self._y)
         d_phi = 1j * np.sin(self.params[0] / 2) * (
-                np.sin(self.params[1]) * self._x + np.cos(self.params[1]) * self._y)
+                np.sin(self.params[1]) * self._x - np.cos(self.params[1]) * self._y)
         self.derivative[0] = d_theta
         self.derivative[1] = d_phi
 

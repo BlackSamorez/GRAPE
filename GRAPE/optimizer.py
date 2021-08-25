@@ -1,12 +1,13 @@
 import numpy as np
+
 from .circuit import Circuit, OneQubitEntanglementAlternation
-from .multiqubitgates import CXCascade
+from .multiqubitgates import Evolution
 
 
 class GradientOptimization:
     def __init__(self, target, circuit: Circuit = None, filename: str = None):
         self.target = target  # unitary to approximate
-        self.stepSize = 0.1  # gradient-to-change ration
+        self.learning_rate = 0.01  # gradient-to-change ration
 
         if filename is not None:
             raise NotImplementedError
@@ -16,10 +17,11 @@ class GradientOptimization:
             self.phase = 0  # global phase
 
             if circuit is None:
-                self.circuit = OneQubitEntanglementAlternation(self._size, entanglement_gate_type=CXCascade,
+                self.circuit = OneQubitEntanglementAlternation(self._size, entanglement_gate_type=Evolution,
                                                                number_of_entanglements=2 * self._size)
             else:
                 self.circuit = circuit
+        self.set_hamiltonian = self.circuit.set_hamiltonian
         self.update()
 
     @property
@@ -54,8 +56,7 @@ class GradientOptimization:
         :return: derivative of norm
         """
         return (((self.matrix - self.target) @ derivative.conjugate().T).trace() + (
-                derivative @ (
-                    self.matrix - self.target).conjugate().T).trace()).real
+                derivative @ (self.matrix - self.target).conjugate().T).trace()).real
 
     def update(self):
         """Update the circuit"""
@@ -69,34 +70,24 @@ class GradientOptimization:
         for i in range(len(self.circuit.gates)):
             for parameter in range(len(self.circuit.gates[i].params)):
                 metric_derivative = self.metric_derivative(self.circuit.derivative(i, parameter))
-                self.circuit.gates[i].params[parameter] -= self.stepSize * metric_derivative
+                self.circuit.gates[i].params[parameter] -= self.learning_rate * metric_derivative
 
     def descend(self, steps=1000, track_distance=False):
         distances = []  # distances to track
 
+        self.update()
         for i in range(steps):
             distances.append(self.metric_distance)
             self.corrections_from_gradients()
             self.update()
-            self.phase -= np.angle((self.target_d @ self.matrix).trace())
+            self.phase = np.angle((self.target_d @ self.matrix).trace())
 
         # most parameters are cyclic - make them in (0, max)
         self.circuit.normalize()
-
-        self.phase = self.phase.real % (2 * np.pi)
+        self.update()
 
         if track_distance:
             return distances
-
-    def to_qiskit(self):
-        raise NotImplementedError
-        # return self.circuit.to_quiskit()
-
-    def set_j(self, new_j):
-        raise NotImplementedError
-        # for gate in self.gates:
-        #     if type(gate) is Delay:
-        #         gate.set_j(new_j)
 
     def make_times_positive(self):
         raise NotImplementedError

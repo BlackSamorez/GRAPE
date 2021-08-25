@@ -2,8 +2,8 @@ import random
 from abc import ABC, abstractmethod
 
 import numpy as np
+
 from .onequbitgates import OneQubitGate, GeneralOneQubitGate, NMROneQubitGate
-from qiskit import QuantumCircuit
 
 
 class MultiQubitGate(ABC):
@@ -43,7 +43,7 @@ class MultiQubitGate(ABC):
         pass
 
 
-class Delay(MultiQubitGate):
+class Evolution(MultiQubitGate):
     """Evolution under fixed NMR Hamiltonian"""
 
     def __init__(self, size: int, time: float = 0):
@@ -57,7 +57,6 @@ class Delay(MultiQubitGate):
             for j in range(i + 1, self.size):
                 self.j[i][j] = 1
         self.hamiltonian = np.zeros((2 ** self.size, 2 ** self.size), dtype=complex)
-
         self.derivative = np.zeros((1, 2 ** self.size, 2 ** self.size), dtype=complex)
 
         class ParamsGetter:
@@ -114,15 +113,21 @@ class Delay(MultiQubitGate):
         self.update_matrix()
         self.update_derivative()
 
-    def set_j(self, new_j):
+    def set_j(self, new_j: np.ndarray):
         for i in range(self.j.shape[0]):
             for j in range(self.j.shape[1]):
                 self.j[i][j] = new_j[i][j]
 
     def randomize_params(self, exp=0.3):
-        self.time = random.uniform(0, exp / 0.00148)
+        if self.size == 3:
+            self.time = random.uniform(0, exp / 0.00148)
+        elif self.size == 2:
+            self.time = random.uniform(0, exp / 0.013)
+        else:
+            raise NotImplementedError("IDK")
 
     def to_circuit(self):
+        from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
         return circuit
@@ -212,6 +217,7 @@ class Pulse(MultiQubitGate):
             basicGate.randomize_params()
 
     def to_circuit(self):
+        from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in range(self.size):
             circuit.r(self.basic_gates[i].params[0], self.basic_gates[i].params[1], circuit.qubits[i])
@@ -272,6 +278,7 @@ class Inversion(MultiQubitGate):
         pass
 
     def to_circuit(self):
+        from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in self.qubits:
             circuit.x(i)
@@ -342,6 +349,7 @@ class CXCascade(MultiQubitGate):
         pass
 
     def to_circuit(self):
+        from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in range(self.size - 1):
             circuit.cx(i, i + 1)

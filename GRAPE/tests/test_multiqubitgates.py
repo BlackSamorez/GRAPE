@@ -1,7 +1,8 @@
 from unittest import TestCase
 
 import numpy as np
-from GRAPE.multiqubitgates import Delay, Pulse, Inversion, CXCascade
+
+from GRAPE.multiqubitgates import Evolution, Pulse, Inversion, CXCascade
 from GRAPE.onequbitgates import GeneralOneQubitGate
 
 
@@ -34,6 +35,36 @@ class TestPulse(TestCase):
             np.testing.assert_allclose(pulse.derivative[pulse.basic_gates[0].number_of_parameters + i],
                                        np.kron(pulse.basic_gates[1].derivative[i], pulse.basic_gates[0].matrix),
                                        rtol=0.001, atol=0.001)
+
+    def test_derivative(self):
+        pulse = Pulse(2)
+        pulse.randomize_params()
+        pulse.update()
+
+        test_increment = 0.0001
+        derivative = pulse.derivative
+        matrix = pulse.matrix
+        for param in range(len(pulse.params)):
+            pulse.params[param] += test_increment
+            pulse.update()
+            np.testing.assert_allclose((pulse.matrix - matrix) / test_increment, derivative[param],
+                                       rtol=0.01)
+            pulse.params[param] -= test_increment
+
+    def test_derivative_nmr(self):
+        pulse = Pulse(2, one_qubit_gate_type="nmr")
+        pulse.randomize_params()
+        pulse.update()
+
+        test_increment = 0.0001
+        derivative = pulse.derivative
+        matrix = pulse.matrix
+        for param in range(len(pulse.params)):
+            pulse.params[param] += test_increment
+            pulse.update()
+            np.testing.assert_allclose((pulse.matrix - matrix) / test_increment, derivative[param],
+                                       rtol=0.01)
+            pulse.params[param] -= test_increment
 
     def test_to_circuit(self):
         pulse = Pulse(2)
@@ -105,9 +136,24 @@ class TestCXCascade(TestCase):
 
 class TestDelay(TestCase):
     def test_params(self):
-        delay = Delay(2)
+        delay = Evolution(2)
         for i in range(len(delay.params)):
             old = delay.params[i]
             delay.params[i] = delay.params[i]
             new = delay.params[i]
             self.assertEqual(old, new)
+
+    def test_derivative(self):
+        delay = Evolution(2)
+        delay.randomize_params()
+        delay.update()
+
+        test_increment = 0.0001
+        derivative = delay.derivative
+        matrix = delay.matrix
+        for param in range(len(delay.params)):
+            delay.params[param] += test_increment
+            delay.update()
+            np.testing.assert_allclose((delay.matrix - matrix) / test_increment, derivative[param],
+                                       rtol=0.01)
+            delay.params[param] -= test_increment

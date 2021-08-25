@@ -1,8 +1,9 @@
 from unittest import TestCase
 
 import numpy as np
+
 from GRAPE.circuit import Circuit
-from GRAPE.multiqubitgates import Pulse
+from GRAPE.multiqubitgates import Evolution, Pulse, CXCascade
 
 
 class TestCircuit(TestCase):
@@ -44,13 +45,23 @@ class TestCircuit(TestCase):
 
     def test_derivative(self):
         circuit = Circuit(2)
-        circuit += Pulse(2)
-        circuit += Pulse(2)
+        circuit += Pulse(2, one_qubit_gate_type="general")
+        circuit += Evolution(2)
+        circuit += CXCascade(2)
+        circuit += Pulse(2, one_qubit_gate_type="nmr")
+        circuit += Evolution(2)
         circuit += Pulse(2)
 
         circuit.randomize_params()
         circuit.update()
-        for parameter in range(len(circuit.gates[2].params)):
-            np.testing.assert_allclose(
-                circuit.gates[2].derivative[parameter] @ circuit.gates[1].matrix @ circuit.gates[0].matrix,
-                circuit.derivative(2, parameter))
+
+        test_increment = 0.0001
+        matrix = circuit.matrix
+        for i in range(len(circuit.gates)):
+            for param in range(len(circuit.gates[i].params)):
+                derivative = circuit.derivative(i, param)
+                circuit.gates[i].params[param] += test_increment
+                circuit.update()
+                np.testing.assert_allclose((circuit.matrix - matrix) / test_increment, derivative,
+                                           rtol=0.01)
+                circuit.gates[i].params[param] -= test_increment
