@@ -1,6 +1,5 @@
 import random
 from abc import ABC, abstractmethod
-
 import numpy as np
 
 from .onequbitgates import OneQubitGate, GeneralOneQubitGate, NMROneQubitGate
@@ -21,6 +20,13 @@ class MultiQubitGate(ABC):
         if self.params_getter is None:
             raise NotImplementedError("Params getter should be implemented and set")
         return self.params_getter
+
+    @params.setter
+    def params(self, new_params):
+        assert len(self.params) == len(
+            new_params), f"wrong number of parameters to set: {len(self.params)} were expected but {len(new_params)} were provided"
+        for i in range(len(self.params)):
+            self.params[i] = new_params[i]
 
     @abstractmethod
     def update(self):

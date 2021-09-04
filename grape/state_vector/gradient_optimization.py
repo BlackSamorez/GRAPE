@@ -1,13 +1,13 @@
 import numpy as np
 
-from .circuit import Circuit, OneQubitEntanglementAlternation
-from .multiqubitgates import Evolution
+from grape.state_vector.circuit import Circuit, OneQubitEntanglementAlternation
+from grape.state_vector.multiqubitgates import Evolution
+from grape.optimizer import Optimizer, AdamOpt, Identity
 
 
 class GradientOptimization:
-    def __init__(self, target, circuit: Circuit = None, filename: str = None):
+    def __init__(self, target, circuit: Circuit = None, optimizer: str = None, filename: str = None):
         self.target = target  # unitary to approximate
-        self.learning_rate = 0.01  # gradient-to-change ration
 
         if filename is not None:
             raise NotImplementedError
@@ -23,6 +23,13 @@ class GradientOptimization:
                 self.circuit = circuit
         self.set_hamiltonian = self.circuit.set_hamiltonian
         self.update()
+
+        if optimizer is None:
+            self.optimizer = Identity()
+        elif optimizer == "adam":
+            self.optimizer = AdamOpt(len(self.circuit.params))
+        else:
+            raise ValueError(f'optimizer must be None or "adam ", {optimizer} was given')
 
     @property
     def matrix(self):
@@ -67,10 +74,10 @@ class GradientOptimization:
         self.circuit.randomize_params()
 
     def corrections_from_gradients(self):
-        for i in range(len(self.circuit.gates)):
-            for parameter in range(len(self.circuit.gates[i].params)):
-                metric_derivative = self.metric_derivative(self.circuit.derivative(i, parameter))
-                self.circuit.gates[i].params[parameter] -= self.learning_rate * metric_derivative
+        derivatives = np.zeros((len(self.circuit.params)), dtype=float)
+        for i in range(len(self.circuit.params)):
+            derivatives[i] = self.metric_derivative(self.circuit.derivative(i))
+        self.circuit.params = self.optimizer.update(self.circuit.params, derivatives)
 
     def descend(self, steps=1000, track_distance=False):
         distances = []  # distances to track
@@ -80,7 +87,7 @@ class GradientOptimization:
             distances.append(self.metric_distance)
             self.corrections_from_gradients()
             self.update()
-            self.phase = np.angle((self.target_d @ self.matrix).trace())
+            # self.phase = np.angle((self.target_d @ self.matrix).trace())
 
         # most parameters are cyclic - make them in (0, max)
         self.circuit.normalize()

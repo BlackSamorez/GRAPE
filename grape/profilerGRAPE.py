@@ -1,8 +1,8 @@
 import numpy as np
 
-from GRAPE.circuit import Circuit
-from GRAPE.multiqubitgates import Pulse, Evolution
-from GRAPE.optimizer import GradientOptimization
+from grape.state_vector.circuit import Circuit
+from grape.state_vector.multiqubitgates import Pulse, Evolution
+from grape.state_vector.gradient_optimization import GradientOptimization
 
 cx = np.asarray([[1, 0, 0, 0],
                  [0, 1, 0, 0],

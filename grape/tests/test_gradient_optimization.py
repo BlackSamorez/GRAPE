@@ -2,9 +2,9 @@ from unittest import TestCase
 
 import numpy as np
 
-from GRAPE.circuit import Circuit
-from GRAPE.multiqubitgates import Pulse, Evolution, CXCascade
-from GRAPE.optimizer import GradientOptimization
+from grape.state_vector.circuit import Circuit
+from grape.state_vector.multiqubitgates import Pulse, Evolution, CXCascade
+from grape.state_vector.gradient_optimization import GradientOptimization
 
 CX = np.asarray([[1, 0, 0, 0],
                  [0, 1, 0, 0],
@@ -40,18 +40,17 @@ class TestGradientOptimization(TestCase):
 
         test_increment = 0.0001
         metric_distance = opt.metric_distance
-        for gate in range(len(opt.circuit.gates)):
-            for parameter in range(len(opt.circuit.gates[gate].params)):
-                metric_derivative = opt.metric_derivative(opt.circuit.derivative(gate, parameter))
+        for i in range(len(circuit.params)):
+            metric_derivative = opt.metric_derivative(opt.circuit.derivative(i))
 
-                opt.circuit.gates[gate].params[parameter] += test_increment
-                opt.update()
+            opt.circuit.params[i] += test_increment
+            opt.update()
 
-                np.testing.assert_allclose((opt.metric_distance - metric_distance) / test_increment, metric_derivative,
-                                           rtol=0.01)
+            np.testing.assert_allclose((opt.metric_distance - metric_distance) / test_increment, metric_derivative,
+                                       rtol=0.01)
 
-                opt.circuit.gates[gate].params[parameter] -= test_increment
-                opt.update()
+            opt.circuit.params[i] -= test_increment
+            opt.update()
 
     def test_corrections_from_gradients(self):
         circuit = Circuit(2)
@@ -60,14 +59,14 @@ class TestGradientOptimization(TestCase):
         circuit += Pulse(2)
         circuit.gates[0].params[0] = np.pi
         opt = GradientOptimization(CX, circuit)
-        opt.learning_rate = 1
+        opt.optimizer.eta = 1
         opt.randomize_params()
         opt.update()
         before = opt.circuit.gates[0].params[0]
         opt.corrections_from_gradients()
 
         np.testing.assert_allclose(opt.circuit.gates[0].params[0],
-                                   before - opt.metric_derivative(opt.circuit.derivative(0, 0)))
+                                   before - opt.metric_derivative(opt.circuit.derivative(0)))
 
     def test_descend(self):
         pass
