@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import numpy as np
 
-from GRAPE.onequbitgates import GeneralOneQubitGate, NMROneQubitGate
+from grape.state_vector.onequbitgates import GeneralOneQubitGate, NMROneQubitGate
 
 
 class TestGeneralOneQubitGate(TestCase):
@@ -110,7 +110,7 @@ class TestNMROneQubitGate(TestCase):
         gate.randomize_params()
         gate.update()
 
-        test_increment = 0.0001
+        test_increment = 0.00001
         derivative = gate.derivative
         matrix = gate.matrix
         for param in range(len(gate.params)):

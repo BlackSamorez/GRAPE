@@ -2,8 +2,8 @@ from unittest import TestCase
 
 import numpy as np
 
-from GRAPE.multiqubitgates import Evolution, Pulse, Inversion, CXCascade
-from GRAPE.onequbitgates import GeneralOneQubitGate
+from grape.state_vector.multiqubitgates import Evolution, Pulse, Inversion, CXCascade
+from grape.state_vector.onequbitgates import GeneralOneQubitGate
 
 
 class TestPulse(TestCase):
