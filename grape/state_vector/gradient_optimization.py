@@ -65,9 +65,14 @@ class GradientOptimization:
         return (((self.matrix - self.target) @ derivative.conjugate().T).trace() + (
                 derivative @ (self.matrix - self.target).conjugate().T).trace()).real
 
+    def update_phase(self):
+        """Set optimal phase"""
+        self.phase += -np.angle((self.matrix @ self.target.T).trace())
+
     def update(self):
         """Update the circuit"""
         self.circuit.update()
+        self.update_phase()
 
     def randomize_params(self):
         """Randomize circuit params"""
@@ -123,3 +128,9 @@ class GradientOptimization:
         for gate in self.circuit.gates:
             print(gate.time, end=" ")
         print("\n")
+
+    def to_qiskit(self):
+        from qiskit import QuantumCircuit
+        circuit = self.circuit.to_qiskit()
+        circuit.global_phase = self.phase
+        return circuit

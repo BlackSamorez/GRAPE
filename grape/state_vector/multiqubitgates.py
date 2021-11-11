@@ -37,7 +37,7 @@ class MultiQubitGate(ABC):
         pass
 
     @abstractmethod
-    def to_circuit(self):
+    def to_qiskit(self):
         pass
 
     @abstractmethod
@@ -132,7 +132,7 @@ class Evolution(MultiQubitGate):
         else:
             raise NotImplementedError("IDK")
 
-    def to_circuit(self):
+    def to_qiskit(self):
         from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
@@ -222,7 +222,7 @@ class Pulse(MultiQubitGate):
         for basicGate in self.basic_gates:
             basicGate.randomize_params()
 
-    def to_circuit(self):
+    def to_qiskit(self):
         from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in range(self.size):
@@ -283,7 +283,7 @@ class Inversion(MultiQubitGate):
     def randomize_params(self):
         pass
 
-    def to_circuit(self):
+    def to_qiskit(self):
         from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in self.qubits:
@@ -354,7 +354,7 @@ class CXCascade(MultiQubitGate):
     def randomize_params(self):
         pass
 
-    def to_circuit(self):
+    def to_qiskit(self):
         from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
         for i in range(self.size - 1):

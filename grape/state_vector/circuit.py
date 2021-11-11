@@ -153,6 +153,13 @@ class Circuit:
         for i in range(len(self.params)):
             self.params[i] = new_params[i]
 
+    def to_qiskit(self):
+        from qiskit import QuantumCircuit
+        circuit = QuantumCircuit(self.size)
+        for gate in self.gates:
+            circuit += gate.to_qiskit()
+        return circuit
+
 
 class OneQubitEntanglementAlternation(Circuit):
     """Quantum circuit consisting of alternating single qubit rotations cascades and entanglement gates"""
