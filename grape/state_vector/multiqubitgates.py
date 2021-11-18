@@ -135,7 +135,7 @@ class Evolution(MultiQubitGate):
     def to_qiskit(self):
         from qiskit import QuantumCircuit
         circuit = QuantumCircuit(self.size)
-        circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits)
+        circuit.hamiltonian(self.hamiltonian, float(self.time), circuit.qubits, label=str(round(self.time)) + "ms")
         return circuit
 
     def normalize(self):
